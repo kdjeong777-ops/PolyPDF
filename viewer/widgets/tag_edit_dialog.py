@@ -21,6 +21,22 @@ from PyQt6.QtWidgets import (
 )
 from viewer.i18n import tr
 
+def chip_styles(dark: bool) -> dict:
+    """태그 칩 스타일 — 디자인 SOT §2.5 '태그 칩' 토큰(261114-1 다크 값). 창을 열 때 테마를 읽는다."""
+    if not dark:
+        return {"blue": _CHIP_BLUE, "new": _CHIP_NEW, "auto": _CHIP_AUTO, "pin": _PIN}
+    return {
+        "blue": ("QPushButton{color:#9cc3ff;border:1px solid #2d4d7a;border-radius:9px;padding:1px 8px;background:#1f3556;}"
+                 "QPushButton:hover{background:#27426a;}"),
+        "new": ("QPushButton{color:#f0cf6a;border:1px dashed #8a7330;border-radius:9px;padding:1px 8px;background:#3a3220;}"
+                "QPushButton:hover{background:#463c26;}"),
+        "auto": ("QPushButton{color:#c8c8c8;border:1px solid #5a5a5a;border-radius:9px;padding:1px 6px;background:#3a3a3d;}"
+                 "QPushButton:checked{background:#4a2626;color:#ff8a80;text-decoration:line-through;}"),
+        "pin": ("QPushButton{border:1px solid #5a5a5a;border-radius:9px;padding:1px 5px;background:#3a3a3d;}"
+                "QPushButton:checked{background:#25402a;border-color:#5f9a5f;}"),
+    }
+
+
 _CHIP_BLUE = ("QPushButton{color:#1456c4;border:1px solid #cfe0ff;"
               "border-radius:9px;padding:1px 8px;background:#f3f8ff;}"
               "QPushButton:hover{background:#e3efff;}")
@@ -43,6 +59,8 @@ class TagEditDialog(QDialog):
         suggestions=[{tag, score, kind}] | None(세션 캐시 없음 — 구획 숨김).
         locked_tags = 고치거나 지울 수 없는 자동 태그 — 사진 기본 정보(촬영일·지역·장비·스크린샷, 태그 SOT §8.1, 261111-16)."""
         super().__init__(parent)
+        from viewer import theme as _theme
+        self._st = chip_styles(_theme.is_dark())          # 261114-1(디자인 SOT §2.5 '태그 칩')
         self.setWindowTitle(tr("해시태그 편집"))
         self.resize(500, 360)
         self._auto = list(auto_tags or [])
@@ -70,18 +88,18 @@ class TagEditDialog(QDialog):
                 if t.lower() in self._locked:       # 사진 기본 정보 — 보이기만(✕·📌 없음)
                     lk = QPushButton("·#" + t)
                     lk.setEnabled(False)
-                    lk.setStyleSheet(_CHIP_AUTO)
+                    lk.setStyleSheet(self._st["auto"])
                     lk.setToolTip(tr("사진 기본 정보(촬영일·지역·장비·스크린샷)로 붙은 태그 — 사진에서 다시 읽어 붙으므로 고치거나 지울 수 없습니다"))
                     h.addWidget(lk)
                     continue
                 chip = QPushButton("·#" + t)
                 chip.setCheckable(True)               # 체크 = 거절(✕)
-                chip.setStyleSheet(_CHIP_AUTO)
+                chip.setStyleSheet(self._st["auto"])
                 sc = conf.get(t)
                 chip.setToolTip(tr('자동 부여{v} — 클릭하면 거절(다시 붙지 않음)').format(v=tr(' (신뢰도 {sc:.2f})').format(sc=sc) if sc else ''))
                 pin = QPushButton("📌")
                 pin.setCheckable(True)
-                pin.setStyleSheet(_PIN)
+                pin.setStyleSheet(self._st["pin"])
                 pin.setToolTip(tr('#{t} 를 수동 태그로 고정 — 이후 재계산이 건드리지 않음').format(t=t))
 
                 def _excl(_=False, a=chip, b=pin):    # 거절과 고정은 상호 배타
@@ -110,10 +128,10 @@ class TagEditDialog(QDialog):
             nw = [s for s in sugg if s.get("kind") == "new"][:4]
             if ex:
                 v.addWidget(QLabel(tr("제안 — 기존 태그(클릭하면 추가):")))
-                v.addWidget(self._chip_row(ex, _CHIP_BLUE, tr("기존 태그 제안")))
+                v.addWidget(self._chip_row(ex, self._st["blue"], tr("기존 태그 제안")))
             if nw:
                 v.addWidget(QLabel(tr("제안 — 새 태그 후보(클릭 = 수동 채택):")))
-                v.addWidget(self._chip_row(nw, _CHIP_NEW, tr("새 태그 후보(자동으로는 붙지 않음)")))
+                v.addWidget(self._chip_row(nw, self._st["new"], tr("새 태그 후보(자동으로는 붙지 않음)")))
 
         v.addWidget(QLabel(tr("기존 태그(클릭하면 추가):")))
         wrap = QWidget()
@@ -124,7 +142,7 @@ class TagEditDialog(QDialog):
         for t in shown:
             b = QPushButton("#" + t)
             b.setFlat(True)
-            b.setStyleSheet(_CHIP_BLUE)
+            b.setStyleSheet(self._st["blue"])
             b.clicked.connect(lambda _=False, tag=t: self._add_tag(tag))
             self._flow.addWidget(b)
         self._flow.addStretch(1)

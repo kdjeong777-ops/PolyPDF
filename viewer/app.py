@@ -10246,6 +10246,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         except Exception:
             pass
         try:
+            self.bookmark_tree._style_tag_button()   # 261114-1(디자인 SOT §2.11): '#' 거르기 단추 켜짐 색
+        except Exception:
+            pass
+        try:
             self.shot_strip.refresh_cards()
         except Exception:
             pass

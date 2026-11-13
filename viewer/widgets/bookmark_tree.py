@@ -2527,6 +2527,18 @@ class BookmarkTree(QWidget):
 
     # --- 필터 -------------------------------------------------------------
 
+    # 디자인 SOT §2.5 '태그 켜짐' 토큰 — (바탕, 글자). 261114-1: 다크에서 흰 상자에 흐린 '#1' 이던 것(글자색이 테마색이었다)
+    TAG_ACTIVE = {False: ("#e3efff", "#1456c4"), True: ("#1456c4", "#ffffff")}
+
+    def _style_tag_button(self):
+        """`#` 거르기 단추 — 켜지면(태그 토큰이 있으면) 테마별 바탕·글자 한 쌍 + 굵게, 꺼지면 테마 기본. 테마를 바꾸면 다시 부른다."""
+        if not getattr(self, "_tag_active", False):
+            self.btn_tag.setStyleSheet("")
+            return
+        from viewer import theme as _theme
+        bg, fg = self.TAG_ACTIVE[bool(_theme.is_dark())]
+        self.btn_tag.setStyleSheet("QPushButton{background:%s;color:%s;font-weight:bold;}" % (bg, fg))
+
     def _on_filter(self, text: str):
         toks = (text or "").strip().split()
         tagq = [t[1:].lower() for t in toks if t.startswith("#") and len(t) > 1]
@@ -2534,8 +2546,8 @@ class BookmarkTree(QWidget):
         # 260830 P4(검색 SOT §5.1): 버튼에 활성 태그 수 표시(#N + 강조 — 디자인 §2.11)
         try:
             self.btn_tag.setText(f"#{len(tagq)}" if tagq else "#")
-            self.btn_tag.setStyleSheet(
-                "QPushButton{background:#e3efff;font-weight:bold;}" if tagq else "")
+            self._tag_active = bool(tagq)
+            self._style_tag_button()
         except Exception:
             pass
 
