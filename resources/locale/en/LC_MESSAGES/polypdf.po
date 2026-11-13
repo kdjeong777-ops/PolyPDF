@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-13 23:56+0900\n"
+"POT-Creation-Date: 2026-11-14 06:49+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -7971,6 +7971,10 @@ msgstr "Edit Translation Glossary"
 msgid "두 파일 비교"
 msgstr "Compare two files"
 
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "종류 없음"
+msgstr "No type"
+
 #: viewer/widgets/bookmark_tree.py
 msgid "파일 회전"
 msgstr "Rotate file"
@@ -8123,6 +8127,10 @@ msgstr "Turn on edit mode and continue?"
 #: viewer/widgets/bookmark_tree.py
 msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
 msgstr "Shows the changes between two PDFs side by side in split view (older = the file modified earlier)."
+
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "문서 종류"
+msgstr "Document type"
 
 #: viewer/widgets/bookmark_tree.py
 msgid "책갈피창 목록에 있는 파일만 이름을 바꿀 수 있습니다."
@@ -13339,6 +13347,10 @@ msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그�
 msgstr "Removes the selected tags from all selected files — automatic tags are recorded as rejected so they are not added again"
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "고른 PDF 의 문서 종류를 바꿉니다 — 잘못 붙은 자동 종류는 다시 붙지 않습니다"
+msgstr "Changes the document type of the chosen PDFs — a wrong automatic type won't be added again"
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "현재 태그"
 msgstr "Current tags"
 
@@ -13439,6 +13451,11 @@ msgstr "{n} selected / {v} shown / {m} files"
 #, python-brace-format
 msgid "#{tag}  ({n}건)"
 msgstr "#{tag}  ({n})"
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "자동 {a} · 직접 {m}"
+msgstr "Automatic {a} · Manual {m}"
 
 # | 태그로 붙고, 이후 계산부터 기존 태그로 쓰입니다."
 #: viewer/widgets/tag_batch_dialog.py

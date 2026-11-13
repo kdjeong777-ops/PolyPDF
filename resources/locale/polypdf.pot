@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PolyPDF VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/kdjeong777-ops/PolyPDF/issues\n"
-"POT-Creation-Date: 2026-11-13 23:56+0900\n"
+"POT-Creation-Date: 2026-11-14 06:49+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -7732,6 +7732,10 @@ msgstr ""
 msgid "두 파일 비교"
 msgstr ""
 
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "종류 없음"
+msgstr ""
+
 #: viewer/widgets/bookmark_tree.py
 msgid "파일 회전"
 msgstr ""
@@ -7881,6 +7885,10 @@ msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
 msgid "두 PDF 의 바뀐 곳을 2단 보기로 나란히 보여 줍니다(옛판 = 수정 시각이 이른 파일)."
+msgstr ""
+
+#: viewer/widgets/bookmark_tree.py viewer/widgets/tag_apply_dialog.py
+msgid "문서 종류"
 msgstr ""
 
 #: viewer/widgets/bookmark_tree.py
@@ -13017,6 +13025,10 @@ msgid "고른 태그를 고른 파일 모두에서 뗍니다 — 자동 태그�
 msgstr ""
 
 #: viewer/widgets/tag_apply_dialog.py
+msgid "고른 PDF 의 문서 종류를 바꿉니다 — 잘못 붙은 자동 종류는 다시 붙지 않습니다"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
 msgid "현재 태그"
 msgstr ""
 
@@ -13116,6 +13128,11 @@ msgstr ""
 #: viewer/widgets/tag_apply_dialog.py
 #, python-brace-format
 msgid "#{tag}  ({n}건)"
+msgstr ""
+
+#: viewer/widgets/tag_apply_dialog.py
+#, python-brace-format
+msgid "자동 {a} · 직접 {m}"
 msgstr ""
 
 #: viewer/widgets/tag_batch_dialog.py

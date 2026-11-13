@@ -1875,6 +1875,15 @@ class BookmarkTree(QWidget):
                 if not (c.startswith("#") and c.lstrip("#").lower() == tag.lower())]
         self.search_edit.setText(" ".join(keep))
 
+    def set_format(self, paths, fmt) -> list:
+        """261114-2(태그 SOT §5.3.2): 문서 종류 바꾸기 — 자동 종류는 거절, fmt 는 직접 태그(None = 종류 없음)."""
+        if self._tags is None:
+            return []
+        changed = self._tags.set_format(list(paths), fmt)
+        if changed:
+            self.refresh_tag_labels()
+        return changed
+
     def _edit_file_tags(self, path: str):
         """파일 해시태그 편집 다이얼로그 → 저장 후 라벨/필터 갱신.
 
@@ -3120,6 +3129,20 @@ class BookmarkTree(QWidget):
         if not in_sub:
             self._act(menu, tr("서명"), lambda p=path: self._file_action("sign", [p]))
         self._act(menu, tr("해시태그 편집"), lambda p=path: self._edit_file_tags(p))
+        if str(path).lower().endswith(".pdf") and self._tags is not None:
+            # 261114-2(태그 SOT §5.3.2): 문서 종류 ▸ — 고른 PDF 모두(우클릭한 파일이 고름 밖이면 그 파일만)
+            import os
+            from viewer.auto_tag import FORMAT_VOCAB
+            sel = [q for q in self.selected_file_paths() if str(q).lower().endswith(".pdf")]
+            targets = sel if any(os.path.normcase(q) == os.path.normcase(path) for q in sel) else [path]
+            sub = menu.sub(tr("문서 종류")) if hasattr(menu, "sub") else menu.addMenu(tr("문서 종류"))
+            cur = {t.lower() for t in self._tags.get_manual(path)}
+            for fv in FORMAT_VOCAB:
+                a_ = self._act(sub, fv, lambda v=fv, ts=list(targets): self.set_format(ts, v))
+                a_.setCheckable(True)
+                a_.setChecked(fv.lower() in cur)
+            sub.addSeparator()
+            self._act(sub, tr("종류 없음"), lambda ts=list(targets): self.set_format(ts, None))
 
     def _mi_fav(self, menu, file_path=None) -> None:
         menu.group("end")

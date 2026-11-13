@@ -1846,6 +1846,25 @@ class AutoTagWorker(QObject):
             # 260830 P3: 단일 파일 즉석 제안(§8.1)용 세션 캐시 — app 이 회수해 보관
             self.profiles, self.df, self.n_docs = profiles, df, n_docs
 
+            # 261114-2(태그 SOT §5.3.2): 사람이 직접 붙인 종류를 배운다 — 그 파일은 자동 종류 없음, 같은 폴더 2개 이상이면 폴더 규칙
+            from collections import Counter as _Counter
+            from viewer.auto_tag import FORMAT_VOCAB as _FV
+            _vocab = {v.lower(): v for v in _FV}
+            man_fmt, dir_cnt = set(), {}
+            for tag, plist in self.tagged_docs.items():
+                fv = _vocab.get(str(tag).lower())
+                if not fv:
+                    continue
+                for mp in plist:
+                    man_fmt.add(_os.path.normcase(mp))
+                    dir_cnt.setdefault(_os.path.normcase(_os.path.dirname(mp)), _Counter())[fv] += 1
+            learned_dirs = {}
+            for dk, cnt in dir_cnt.items():
+                ranked = cnt.most_common()
+                if ranked[0][1] >= 2 and (len(ranked) == 1 or ranked[1][1] < ranked[0][1]):
+                    learned_dirs[dk] = ranked[0][0]
+            self.learned_dirs = learned_dirs            # 검사용
+
             # 2패스: 제안·게이트·연도·지문·키워드(§9)·신규 후보 적립(§5.4-5)
             results = []
             n_auto_files = 0
@@ -1859,7 +1878,9 @@ class AutoTagWorker(QObject):
                 if f is None:
                     continue
                 sugg = suggest_tags(f, profiles, df, n_docs,
-                                    known_tags=self.known_tags, rules=self.rules)
+                                    known_tags=self.known_tags, rules=self.rules,
+                                    learned={"dir": learned_dirs.get(_os.path.normcase(_os.path.dirname(p))),
+                                             "has_manual": _os.path.normcase(p) in man_fmt})
                 part = partition(sugg)
                 year, ysrc, yconf = extract_year(f, self.today_year)
                 k = key(p)

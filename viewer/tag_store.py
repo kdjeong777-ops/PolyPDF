@@ -404,6 +404,34 @@ class TagStore:
         if not parts:
             v.pop("auto_parts", None)
 
+    def set_format(self, paths, fmt=None) -> list:
+        """§5.3.2 문서 종류 바꾸기(261114-2) — 고른 파일 모두: 다른 종류의 자동 태그는 거절(다시 안 붙음), 다른 종류의
+        직접 태그는 빼고, `fmt` 를 직접 태그로(거절했던 것이면 거절을 푼다). fmt=None 이면 종류 없음. 바뀐 경로 목록."""
+        from viewer.auto_tag import FORMAT_VOCAB
+        vocab = {v.lower() for v in FORMAT_VOCAB}
+        fl = (fmt or "").lower()
+        changed = []
+        with self.bulk():
+            for p in paths:
+                before = self.record(p)
+                auto = [t for t in self.get_auto(p) if t.lower() in vocab and t.lower() != fl]
+                if auto:
+                    self.reject(p, auto)
+                man = [t for t in self.get_manual(p) if t.lower() not in vocab or t.lower() == fl]
+                if fmt:
+                    v = self._data.get(self._key(p))
+                    if isinstance(v, dict) and any(r.lower() == fl for r in v.get("rejected") or ()):
+                        v["rejected"] = [r for r in v["rejected"] if r.lower() != fl]
+                    if fl not in {t.lower() for t in man}:
+                        man.append(fmt)
+                if man != self.get_manual(p):
+                    self.set(p, man)
+                elif self.record(p) != before:
+                    self._save()
+                if self.record(p) != before:
+                    changed.append(p)
+        return changed
+
     def reject(self, path, tags):
         """사용자가 뺀 자동 태그 — rejected 에 영구 기록 + auto 에서 제거(§1-⑤)."""
         tags = normalize_tags(tags)

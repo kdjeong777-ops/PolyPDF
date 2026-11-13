@@ -32,7 +32,8 @@ TUNING = {
     "HEAD_PAGES": 2,           # §4.1 앞부분 본문
     "FALLBACK_HEAD": 20, "FALLBACK_TAIL": 5,   # §7 미색인 폴백
     "LAYOUT_SAMPLE": 8,        # 레이아웃 표본 페이지 수(결정적 간격 — §12)
-    "PRESENT_MIN_AR": 1.3, "PRESENT_MAX_CHARS": 600,    # §5.3 발표자료
+    "PRESENT_MIN_AR": 1.3, "PRESENT_MAX_AR": 1.9, "PRESENT_MAX_CHARS": 600,    # §5.3 발표자료(1.9 상한 — 261114-2)
+    "FORMAT_SIM_MIN": 0.30,    # §5.3.2 사람이 고친 종류와 비슷한 본문
     "BROCHURE_MAX_PAGES": 8, "BROCHURE_IMG_RATIO": 0.4,  # §5.3 브로셔
     "ARTICLE_MAX_PAGES": 4,    # §5.3 기사
     "REPORT_MIN_PAGES": 20,    # §5.3 보고서 기본값 조건
@@ -302,18 +303,47 @@ def extract_features(path, page_texts=None, folder_names=None,
 # ═══════════════════════════════════════════════════════════════════════
 
 _EXPLICIT = [   # ① 파일명/표제 명시어 — 순서 = 판정 순서(261113-10: 지침·시방서·기준·법령·시험성적서는 뺐다, 견적서 더함)
-    ("설명서", ("설명서", "매뉴얼", "사용자", "manual", "mnl", "guide", "_um_")),
+    ("설명서", ("설명서", "매뉴얼", "메뉴얼", "사용자", "사용법", "취급", "퀵", "manual", "mnl", "guide",
+             "quick start", "quickstart", "instruction", "_um_")),          # 261114-2 낱말 늘림(§5.3 표)
     ("견적서", ("견적", "quotation")),
     ("영수증", ("영수증", "세금계산서", "거래명세서", "invoice")),
     ("공문", ("공문", "협조요청", "공람")),
 ]
+# ①-3 폴더 이름(261114-2, 사용자 결정 '폴더 이름도 본다') — 파일 이름 낱말 + 폴더로 모으는 종류
+_FOLDER_EXPLICIT = _EXPLICIT + [
+    ("보고서", ("보고서", "report")),
+    ("논문", ("논문", "paper")),
+    ("발표자료", ("발표자료", "프레젠테이션", "ppt")),
+]
+FOLDER_DEPTH = 3
+# ② 설명서 본문 낱말(261114-2) — 앞 3쪽·뒤 2쪽 원문
+_MANUAL_BODY = ("사용설명서", "사용 설명서", "취급설명서", "취급 설명서", "제품 사양", "품질보증", "품질 보증",
+                "user manual", "user's manual", "instruction manual", "operating instructions", "quick start guide")
 
 
-def classify_format(f: Features, rules: dict | None = None) -> str | None:
-    """§5.3 판정 순서: ①명시어 ②구조(견적서▶영수증▶공문▶논문) ③레이아웃(발표자료) ④기본값.
-    확신 없으면 None(형식 태그 없음 — 틀린 형식보다 없는 편이 낫다 §3.5-A).
-    반환은 alias(§5.3 사용자 어휘 접합) 적용 후 표시명."""
+def folder_format(path: str):
+    """상위 폴더 이름(가까운 것부터 `FOLDER_DEPTH` 단계)에 종류 낱말이 있으면 그 종류(§5.3 ①-3)."""
+    try:
+        parents = list(Path(path).parents)[:FOLDER_DEPTH]
+    except Exception:
+        return None
+    for d in parents:
+        nm = d.name.lower()
+        if not nm:
+            continue
+        for tag, keys in _FOLDER_EXPLICIT:
+            if any(k in nm for k in keys):
+                return tag
+    return None
+
+
+def classify_format(f: Features, rules: dict | None = None, learned: dict | None = None) -> str | None:
+    """§5.3 판정 순서: ①명시어 ①-2 사람이 고친 폴더 ①-3 폴더 이름 ②구조(견적서▶영수증▶공문▶설명서 본문▶논문)
+    ②-2 고친 문서와 비슷한 본문 ③레이아웃(발표자료) ④기본값.
+    learned(§5.3.2) = {"dir": 그 폴더에서 사람이 고친 종류 | None, "sims": {종류: 유사도}} — 워커가 직접 태그로 만든다.
+    확신 없으면 None(형식 태그 없음 — 틀린 형식보다 없는 편이 낫다 §3.5-A)."""
     rules = rules or {}
+    learned = learned or {}
     name = (f.stem + " " + str(f.meta.get("title") or "")).lower()
     txt = f.struct_text[:20000].lower()      # ★ 원문 기준(위 보강) — 스캔이면 자연히 빈 문자열
     fmt = None
@@ -323,6 +353,11 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
         if any(k in name for k in keys):
             fmt = tag
             break
+    # ①-2 사람이 고친 종류(같은 폴더 2개 이상, §5.3.2) ①-3 폴더 이름(261114-2)
+    if fmt is None and learned.get("dir") in FORMAT_VOCAB:
+        fmt = learned["dir"]
+    if fmt is None and f.path:
+        fmt = folder_format(f.path)
 
     # ② 강한 구조 신호 — 토큰이 특이한 순(§5.3 — ③보다 먼저: 짧은 문서 오분류 방지)
     if fmt is None and txt:
@@ -333,14 +368,23 @@ def classify_format(f: Features, rules: dict | None = None) -> str | None:
         elif ("수신" in txt and ("발신" in txt or "참조" in txt
                                 or re.search(r"제\s?\d{2,4}\s?[-–]\s?\d+\s?호", txt))):
             fmt = "공문"
+        elif any(k in txt for k in _MANUAL_BODY):
+            fmt = "설명서"              # 261114-2
         elif (("abstract" in txt and "reference" in txt)
               or "doi:" in txt or "doi.org" in txt
               or re.search(r"\bet\s+al\b", txt)):
             fmt = "논문"
 
-    # ③ 레이아웃 신호(텍스트 불요 — 스캔 PDF 에도 동작 §4.2 각주). 261113-10: 브로셔·기사는 뺐다
+    # ②-2 사람이 고친 문서와 비슷한 본문(§5.3.2 — L1 과 같은 산식, 글자층 있을 때만)
+    if fmt is None:
+        sims = {t: sc for t, sc in (learned.get("sims") or {}).items() if t in FORMAT_VOCAB and sc >= TUNING["FORMAT_SIM_MIN"]}
+        if sims:
+            fmt = max(sims, key=sims.get)
+
+    # ③ 레이아웃 신호(텍스트 불요 — 스캔 PDF 에도 동작 §4.2 각주). 261113-10: 브로셔·기사는 뺐다.
+    #   261114-2(사용자 지시): 다단으로 옆으로 긴 쪽(종횡비 > PRESENT_MAX_AR)은 발표자료가 아니다
     if fmt is None and f.page_count:
-        if (f.aspect >= TUNING["PRESENT_MIN_AR"]
+        if (TUNING["PRESENT_MIN_AR"] <= f.aspect <= TUNING["PRESENT_MAX_AR"]
                 and f.text_per_page < TUNING["PRESENT_MAX_CHARS"]):
             fmt = "발표자료"
 
@@ -547,7 +591,7 @@ def extract_year(f: Features, today_year: int) -> tuple:
 
 def suggest_tags(f: Features, profiles: dict, df: dict, n_docs: int,
                  known_tags=None, rules: dict | None = None,
-                 extra=None) -> list:
+                 extra=None, learned: dict | None = None) -> list:
     """제안 목록(§4 API): [{tag, score, kind, axis, why}]. extra 는 §5.5 확장점(항상 None).
     형식은 판정 서면 score 없이도 자동 대상(§5.6 표 1행) — score 는 표시용 1.0."""
     known = {t.lower() for t in (known_tags or [])}
@@ -555,13 +599,17 @@ def suggest_tags(f: Features, profiles: dict, df: dict, n_docs: int,
     for t in pdf_attr_tags(f, rules):                 # 261113-10 §5.3.1 — 점수 없이 자동
         out.append({"tag": t, "score": 1.0, "axis": "속성",
                     "kind": "existing" if t.lower() in known else "new", "why": "PDF 속성(§5.3.1)"})
-    fmt = classify_format(f, rules)
+    sims = {} if f.scanned else topic_similarities(f, profiles, df, n_docs)
+    lr = learned or {}
+    fmt = None
+    if not lr.get("has_manual"):                     # §5.3.2 — 사람이 종류를 붙인 파일에는 자동 종류를 더 붙이지 않는다
+        lr = {"dir": lr.get("dir"), "sims": {t: sc for t, sc in sims.items() if t in FORMAT_VOCAB}}
+        fmt = classify_format(f, rules, lr)
     if fmt:
         out.append({"tag": fmt, "score": 1.0, "axis": "형식",
                     "kind": "existing" if fmt.lower() in known else "new",
                     "why": "형식 규칙(§5.3)"})
     # 주제 점수(§5.6): max(L1 유사도, 폴더명 일치 0.75) + 겹침 보너스 0.10
-    sims = {} if f.scanned else topic_similarities(f, profiles, df, n_docs)
     folder_hit = set()
     known_low = {t.lower(): t for t in (known_tags or [])}
     for w in folder_candidates(f.folder_names):

@@ -203,6 +203,18 @@ class TagApplyDialog(QDialog):
         self.btn_clear.clicked.connect(lambda: self.apply_tags(False))
         top.addWidget(self.btn_apply)
         top.addWidget(self.btn_clear)
+        # 261114-2(태그 SOT §5.3.2): 문서 종류 바꾸기 — 고른 PDF 의 종류를 한 번에(자동 종류는 거절, 고른 종류는 직접 태그)
+        from PyQt6.QtWidgets import QMenu
+        from viewer.auto_tag import FORMAT_VOCAB
+        self.btn_format = QPushButton(tr("문서 종류"))
+        self.btn_format.setToolTip(tr("고른 PDF 의 문서 종류를 바꿉니다 — 잘못 붙은 자동 종류는 다시 붙지 않습니다"))
+        fm = QMenu(self.btn_format)
+        for fv in FORMAT_VOCAB:                 # 종류 이름은 태그 데이터라 번역하지 않는다(다국어 SOT §5)
+            fm.addAction(fv).triggered.connect(lambda _=False, v=fv: self.set_format(v))
+        fm.addSeparator()
+        fm.addAction(tr("종류 없음")).triggered.connect(lambda _=False: self.set_format(None))
+        self.btn_format.setMenu(fm)
+        top.addWidget(self.btn_format)
         top.addStretch(1)
         self.lbl_sel = QLabel()
         top.addWidget(self.lbl_sel)
@@ -586,13 +598,19 @@ class TagApplyDialog(QDialog):
         self.lst_tags.clear()
         from viewer.tag_pairs import shared as _pairs
         pt = _pairs()
+        manual = {}
+        for p in self._paths:
+            for m in self._store.get_manual(p):
+                manual[m.lower()] = manual.get(m.lower(), 0) + 1
         for t in order:
             mate = pt.partner(t)                        # 261113-9(§8.9): 짝이 있으면 '태그 ⇄ 짝'
-            it = QListWidgetItem(("#%s ⇄ %s  (%d)" % (t, mate, counts[t])) if mate else ("#%s  (%d)" % (t, counts[t])))
+            hm = "#" if manual.get(t.lower()) or not counts[t] else "·#"    # 261114-2(§5.3.2): 자동으로만 붙은 태그는 '·#'
+            it = QListWidgetItem(("%s%s ⇄ %s  (%d)" % (hm, t, mate, counts[t])) if mate else ("%s%s  (%d)" % (hm, t, counts[t])))
             it.setData(Qt.ItemDataRole.UserRole, t)
             it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             it.setCheckState(Qt.CheckState.Checked if self._has.get(t.lower(), True) else Qt.CheckState.Unchecked)
-            it.setToolTip(tr("체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"))
+            it.setToolTip(tr("자동 {a} · 직접 {m}").format(a=max(0, counts[t] - manual.get(t.lower(), 0)), m=manual.get(t.lower(), 0))
+                          + "\n" + tr("체크하면 이 태그가 있는 파일, 체크를 풀면 없는 파일을 오른쪽에 보입니다(줄을 고를 때)"))
             self.lst_tags.addItem(it)
             if t in keep:
                 it.setSelected(True)
@@ -687,6 +705,23 @@ class TagApplyDialog(QDialog):
                 seen.add(t.lower())
                 res.append(t)
         return res
+
+    def set_format(self, fmt) -> int:
+        """261114-2(태그 SOT §5.3.2): 고른 PDF 의 문서 종류를 fmt 로(None = 종류 없음) — 되돌리기 한 걸음. 바뀐 파일 수."""
+        files = [p for p in self.selected_paths() if str(p).lower().endswith(".pdf")]
+        if not files:
+            return 0
+        st = self._store
+        before = {p: st.record(p) for p in files}
+        changed = st.set_format(files, fmt)
+        if changed:
+            self._undo.append(({p: before[p] for p in changed}, {p: st.record(p) for p in changed}))
+            self._redo.clear()
+            self._fill_tags()
+            self.changed.emit()
+            self._apply_filter()
+        self._refresh_marks()
+        return len(changed)
 
     def apply_tags(self, on: bool) -> int:
         """[적용](on) = 고른 파일 모두에 붙임 · [해제] = 모두에서 뗌(자동 태그는 거절). 바뀐 파일 수."""
