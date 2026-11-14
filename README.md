@@ -1,3 +1,10 @@
+<!-- moved-to-polypinax -->
+> **이 저장소는 옮겼습니다 — PolyPDF 는 이제 PolyPinax 입니다: https://github.com/kdjeong777-ops/PolyPinax**  
+> 설치된 앱은 앱 안 업데이트로 새 이름·새 주소로 넘어갑니다(설정·색인 그대로). 이 저장소는 보관만 합니다.
+>
+> **This repository has moved — PolyPDF is now PolyPinax: https://github.com/kdjeong777-ops/PolyPinax**  
+> Installed copies move over through the in-app update (settings and index carry over). This repository is archived.
+
 # PolyPinax
 
 **폴더째 펼쳐 보는 PDF·사진 뷰어** — *A PDF & photo viewer that opens whole folders.*
