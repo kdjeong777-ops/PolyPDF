@@ -7597,7 +7597,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         self._autotag_maybe_rescan()
 
     def _autotag_first_summary(self, stats, n_auto):
-        """§8.2 첫 실행 요약 — 1회 모달. 무엇을 '안 했는지'도 말한다(조용한 누락 금지)."""
+        """§8.2 첫 실행 요약 — 1회, **비모달 알림 창**(261114-15: 모달 exec 는 폴더를 열면 도는 계산 끝에 떠
+        사용자 작업·검사를 막았다). 무엇을 '안 했는지'도 말한다(조용한 누락 금지)."""
         if self._prefs.get("autotag_summary_shown", False):
             return
         self._prefs["autotag_summary_shown"] = True
@@ -7616,11 +7617,17 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 review = box.addButton(tr("새 태그 후보 검토"),
                                        QMessageBox.ButtonRole.ActionRole)
             box.addButton(tr("확인"), QMessageBox.ButtonRole.AcceptRole)
-            box.exec()
-            if box.clickedButton() is undo:
-                self._autotag_undo()
-            elif review is not None and box.clickedButton() is review:
-                self._autotag_review_candidates()
+
+            def clicked(btn):
+                if btn is undo:
+                    self._autotag_undo()
+                elif review is not None and btn is review:
+                    self._autotag_review_candidates()
+            box.buttonClicked.connect(clicked)
+            box.setWindowModality(Qt.WindowModality.NonModal)
+            box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            self._autotag_summary_box = box
+            box.show()
         except Exception:
             pass
 
