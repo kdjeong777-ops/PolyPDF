@@ -1783,6 +1783,12 @@ class BookmarkTree(QWidget):
         체크해도 닫히지 않는다(QWidgetAction). 개수 = **지금 목록의 파일** 기준(`_list_tag_counts`, 261107-9) —
         거르기(`_on_filter`)가 보는 것과 같은 줄이라, 고르면 그 개수만큼 남는다. 연도 불포함(태그 SOT §3.6)."""
         self._tag_menu.clear()
+        try:                                  # 261114-13(태그 SOT §8.2): 태그 계산이 도는 동안 맨 위 한 줄
+            busy = self.window().autotag_busy_text()
+        except Exception:
+            busy = ""
+        if busy:
+            self._tag_menu.addAction(busy).setEnabled(False)
         counts = self._list_tag_counts()
         active = {c.lstrip("#").lower() for c in self.search_edit.text().split()
                   if c.startswith("#")}

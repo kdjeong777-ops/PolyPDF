@@ -209,6 +209,16 @@ class TagApplyDialog(QDialog):
         self._cand = load_candidates()
 
         v = QVBoxLayout(self)
+        # 261114-13(태그 SOT §8.2): 전체 태그 계산이 도는 동안 맨 위 한 줄
+        try:
+            busy = parent.autotag_busy_text() if parent is not None and hasattr(parent, "autotag_busy_text") else ""
+        except Exception:
+            busy = ""
+        self.lbl_busy = QLabel(busy)
+        self.lbl_busy.setObjectName("tag_busy")
+        self.lbl_busy.setStyleSheet("color:#888;")
+        self.lbl_busy.setVisible(bool(busy))
+        v.addWidget(self.lbl_busy)
         # 261113-9(태그 SOT §8.7, 사용자 지시): 위 줄 = '해시태그' · [↶][↷](꾸밈 도구 줄과 같은 그림 글자) · 조금 띄워 [적용][해제]
         top = QHBoxLayout()
         lbl_tag = QLabel(tr("해시태그"))

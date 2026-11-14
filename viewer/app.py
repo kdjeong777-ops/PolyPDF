@@ -160,6 +160,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     bgWriteFailed = pyqtSignal(str, str)     # 261108-15: 배경 쓰기 줄(`bg_write`)의 실패 — 배경 스레드에서 보내 메인에서 알림
     MAX_RECENT_FOLDERS = 10
     MAX_RECENT_FILES = 10
+    AUTOTAG_ETA_MIN_S = 30                   # 261114-13: 태그 계산 남은 시간은 이보다 길 때만 적는다
 
     def __init__(self):
         super().__init__()
@@ -7292,10 +7293,13 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                           today_year=date.today().year,
                           store_keys=set(store._data.keys()),
                           fp_missing_keys=fp_missing, kw_skip_keys=kw_skip,
-                          force=force, store_hash=self._autotag_store_hash(store, paths))   # 261114-4(태그 SOT §8.2)
+                          force=force, store_hash=self._autotag_store_hash(store, paths),   # 261114-4(태그 SOT §8.2)
+                          priority=self._autotag_priority())                                # 261114-13
         self._autotag_worker = w
+        self._autotag_live = {"t0": __import__("time").monotonic(), "backup": False, "d": 0, "t": 0}
         self._set_probe_paused(True)              # 260906-8(응답성 SOT §4 ①)
-        w.progress.connect(lambda d, t, n: self.status.showMessage(_autotag_text(d, t), 1500))
+        w.progress.connect(self._on_autotag_progress)
+        w.found.connect(self._on_autotag_found)
         w.finished.connect(self._on_autotag_finished)
         w.error.connect(self._on_autotag_error)
         run_in_thread(w, self._thread_keep)
@@ -7321,7 +7325,85 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 bt._emit_nav(prev[0], prev[1])
                 return
 
+    # ── 261114-13(태그 SOT §8.2, 응답성 SOT §4.6): 태그 계산 중임을 보인다 · 종류·속성은 하는 대로 ──────────
+    def _autotag_priority(self) -> list:
+        """먼저 계산할 파일 — 지금 연 파일·책갈피창에서 고른 파일·책갈피창에 보이는 파일(메인 일은 줄 몇십 개)."""
+        out = []
+        try:
+            cur = self.main_view.current_file()
+            if cur:
+                out.append(str(cur))
+        except Exception:
+            pass
+        bt = self.bookmark_tree
+        try:
+            for it in bt.tree.selectedItems()[:200]:
+                node = bt._file_node_of(it)
+                fp = node.data(0, bt.DATA_FILE) if node is not None else None
+                if fp:
+                    out.append(str(fp))
+        except Exception:
+            pass
+        try:
+            vp = bt.tree.viewport()
+            step = max(6, bt.tree.fontMetrics().height() // 2)
+            for y in range(0, vp.height(), step):
+                it = bt.tree.itemAt(4, y)
+                node = bt._file_node_of(it) if it is not None else None
+                fp = node.data(0, bt.DATA_FILE) if node is not None else None
+                if fp:
+                    out.append(str(fp))
+        except Exception:
+            pass
+        return list(dict.fromkeys(p for p in out if p.lower().endswith(".pdf")))
+
+    def _on_autotag_progress(self, d: int, t: int, _p: str = ""):
+        """상태 표시줄 글 + 작업 창 '태그 계산'(첫 진행 때 오른다 — 건너뛴 계산은 오르지 않는다)·진행 막대·남은 시간."""
+        live = self.__dict__.get("_autotag_live")
+        w = self.__dict__.get("_autotag_worker")
+        if live is None or w is None:
+            return
+        live["d"], live["t"] = int(d), int(t)
+        msg = _autotag_text(d, t)
+        n = max(1, int(t) // 2)
+        if 0 < d < n:                                  # 오래 걸리는 것은 1패스(재료 읽기) — 2패스는 짧다
+            left = (__import__("time").monotonic() - live["t0"]) / d * (n - d)
+            if left >= self.AUTOTAG_ETA_MIN_S:
+                msg += " · " + tr("남은 시간 약 {m}분").format(m=max(1, int(left / 60 + 0.5)))
+        self.status.showMessage(msg, 1500)
+        jobs = self.__dict__.get("_jobs")
+        if jobs is None:
+            return
+        if "autotag" not in jobs:
+            self.job_add("autotag", tr("태그 계산"), cancel=w.request_cancel)
+        try:
+            self.progress.setRange(0, max(1, int(t)))
+            self.progress.setValue(int(d))
+        except Exception:
+            pass
+        self.job_progress("autotag", msg)
+
+    def _on_autotag_found(self, found: dict):
+        live = self.__dict__.get("_autotag_live")
+        if live is not None:
+            self._apply_fast_tags(found, live)
+
+    def _autotag_job_end(self):
+        self.__dict__["_autotag_live"] = None
+        if "autotag" in (self.__dict__.get("_jobs") or {}):
+            self.job_done("autotag")
+
+    def autotag_busy_text(self) -> str:
+        """'해시태그 수정' 창·'#' 메뉴 한 줄 — 전체 태그 계산이 도는 동안만."""
+        live = self.__dict__.get("_autotag_live")
+        if live is None or self.__dict__.get("_autotag_worker") is None:
+            return ""
+        n = max(1, int(live.get("t") or 0) // 2)
+        k = min(n, int(live.get("d") or 0))
+        return tr("태그 계산 중 {k}/{n} — 자동 태그가 바뀔 수 있습니다").format(k=k, n=n)
+
     def _on_autotag_error(self, msg):
+        self._autotag_job_end()
         self._autotag_worker = None
         self._set_probe_paused(False)             # 260906-8(응답성 SOT §4 ①)
         self.status.showMessage(tr('태그 계산 오류: {msg}').format(msg=msg), 4000)
@@ -7410,7 +7492,11 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         run_in_thread(w, self._thread_keep)
 
     def _on_light_found(self, found: dict):
-        st = self.__dict__.get("_light") or {}
+        self._apply_fast_tags(found, self.__dict__.get("_light") or {})
+
+    def _apply_fast_tags(self, found: dict, st: dict):
+        """종류·속성만 곧바로(색인 중 50개마다 `TagLightWorker`·전체 계산 1패스 `AutoTagWorker.found` — 261114-13).
+        주제 태그는 그대로, 저장 한 번, 백업은 그 회차(`st`)에 처음 한 번."""
         store = getattr(self.bookmark_tree, "_tags", None)
         if store is None or not found:
             return
@@ -7451,6 +7537,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
     def _on_autotag_finished(self, results, stats):
         """워커 결과를 UI 스레드에서 적용 — 재연결(§6.1)·자동 부여(§5.6)·연도(§9.4).
         ★ 일괄 적용 전 백업 필수(§6) — 실패하면 아무것도 쓰지 않는다."""
+        self._autotag_job_end()                    # 261114-13: 작업 창에서 내린다(중단·건너뜀 포함)
         w = self._autotag_worker
         self._autotag_worker = None
         self._set_probe_paused(False)             # 260906-8(응답성 SOT §4 ①)
@@ -7460,6 +7547,9 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
         store = getattr(self.bookmark_tree, "_tags", None)
         if stats.get("skipped"):                     # 261114-4(태그 SOT §8.2): 입력이 지난번과 같다 — 그대로
             self._autotag_maybe_rescan()
+            return
+        if stats.get("cancelled"):                   # 261114-13: [중단] — 만든 재료·바꾼 종류·속성은 남는다
+            self.status.showMessage(tr("태그 계산을 멈췄습니다 — 다음 계산은 만든 재료로 이어서 빠릅니다."), 6000)
             return
         if store is None or not results:
             return

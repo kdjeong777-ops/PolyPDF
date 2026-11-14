@@ -1768,13 +1768,15 @@ class AutoTagWorker(QObject):
     progress = pyqtSignal(int, int, str)      # done, total, current
     finished = pyqtSignal(list, dict)         # results, stats
     error = pyqtSignal(str)
+    found = pyqtSignal(dict)                  # 261114-13(태그 SOT §8.2): 1패스 중 {경로: [종류·속성]} — 50개마다·먼저 할 파일 뒤
 
     YIELD_S = 0.005      # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보
+    FOUND_EVERY = 50
 
     TAGGER_VER = 2                               # 261114-4: 판정 규칙을 바꾸면 올린다(입력 서명이 달라져 다시 계산) · 2 = 261114-10 2단 설명서
 
     def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
-                 today_year, store_keys, fp_missing_keys, kw_skip_keys=(), force=False, store_hash=""):
+                 today_year, store_keys, fp_missing_keys, kw_skip_keys=(), force=False, store_hash="", priority=()):
         super().__init__()
         self.force = bool(force)                  # 261114-4: True = 입력이 같아도 계산('태그 다시 계산'·규칙 적용)
         self.store_hash = str(store_hash or "")   # 메인이 센 저장소 기록(그 파일들의 직접·자동·거절) — 입력 서명에 든다
@@ -1782,6 +1784,12 @@ class AutoTagWorker(QObject):
         self.profiles = self.df = self.n_docs = None   # 건너뛰어도 메인이 읽는 속성(지워진 Qt 객체를 건드리지 않게)
         self.db_path = db_path
         self.paths = [str(p) for p in paths]
+        # 261114-13: 지금 연·보이는·고른 파일을 먼저(그만큼 종류·속성을 곧바로 내보낸다) — 입력 서명은 정렬해 세므로 그대로
+        import os as _os
+        _pk = {_os.path.normcase(str(p)) for p in (priority or ())}
+        first = [p for p in self.paths if _os.path.normcase(p) in _pk]
+        self.paths = first + [p for p in self.paths if _os.path.normcase(p) not in _pk]
+        self.n_priority = len(first)
         self.tagged_docs = dict(tagged_docs)      # {태그: [경로…]} — 프로파일 학습용
         self.known_tags = list(known_tags)
         self.rules = dict(rules or {})
@@ -1891,6 +1899,7 @@ class AutoTagWorker(QObject):
         try:
             import os as _os
             from viewer.auto_tag import (build_profiles, extract_features, features_from_dict, features_to_dict,
+                                         classify_format, pdf_attr_tags,
                                          extract_year, new_tag_candidates,
                                          partition, suggest_keywords,
                                          suggest_tags)
@@ -1918,6 +1927,17 @@ class AutoTagWorker(QObject):
                                         "base_sig": base_sig, "sig_key": sig_key})
                 return
             fps = {}                                  # 재료에 적힌 지문(§6.1) — 다시 열지 않는다
+            # 261114-13(태그 SOT §8.2): 1패스에서 종류·속성을 곧바로 — 사람이 고친 종류는 2패스와 같은 규칙
+            man_fmt, learned_dirs = learn_formats(self.tagged_docs)
+            batch = {}
+
+            def cancelled():
+                try:
+                    if ix is not None:
+                        ix.close()
+                except Exception:
+                    pass
+                self.finished.emit([], {"total": len(self.paths), "cancelled": True})
 
             folder_names, big_dirs, dir_count = self._folder_ctx()
             ko_map = self._ko_lookup_map()
@@ -1929,6 +1949,9 @@ class AutoTagWorker(QObject):
             total = len(self.paths)
             for i, p in enumerate(self.paths):
                 if self._cancel:
+                    if batch:
+                        self.found.emit(batch)
+                    cancelled()
                     return
                 # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보 — 색인에 없는 파일은
                 #   `extract_features` 가 fitz 로 폴백해 그 사이 메인이 굶는다.
@@ -1952,6 +1975,18 @@ class AutoTagWorker(QObject):
                 except Exception:
                     continue
                 feats[p] = f
+                try:
+                    quick = pdf_attr_tags(f, self.rules)
+                    if _os.path.normcase(p) not in man_fmt:
+                        fq = classify_format(f, self.rules, {"dir": learned_dirs.get(_os.path.normcase(_os.path.dirname(p)))})
+                        if fq:
+                            quick.append(fq)
+                    batch[p] = quick
+                except Exception:
+                    pass
+                if batch and (len(batch) >= self.FOUND_EVERY or i + 1 == self.n_priority):
+                    self.found.emit(batch)
+                    batch = {}
                 for t in set(f.terms):
                     df[t] = df.get(t, 0) + 1
                 d = _os.path.dirname(p)
@@ -1960,6 +1995,9 @@ class AutoTagWorker(QObject):
                     for t in set(f.terms):
                         dd[t] = dd.get(t, 0) + 1
                 self.progress.emit(i + 1, total * 2, p)
+            if batch:
+                self.found.emit(batch)
+                batch = {}
             n_docs = max(1, len(feats))
             # 폴더 공통어(§9.2-3): ≥20파일 폴더에서 60% 이상 문서에 나오는 어휘
             folder_common = {}
@@ -1978,8 +2016,7 @@ class AutoTagWorker(QObject):
             self.profiles, self.df, self.n_docs = profiles, df, n_docs
 
             # 261114-2(태그 SOT §5.3.2): 사람이 직접 붙인 종류를 배운다 — 그 파일은 자동 종류 없음, 같은 폴더 2개 이상이면 폴더 규칙
-            man_fmt, learned_dirs = learn_formats(self.tagged_docs)
-            self.learned_dirs = learned_dirs            # 검사용
+            self.learned_dirs = learned_dirs            # 검사용(1패스 앞에서 배운 것 — 261114-13)
 
             # 2패스: 제안·게이트·연도·지문·키워드(§9)·신규 후보 적립(§5.4-5)
             results = []
@@ -1988,6 +2025,7 @@ class AutoTagWorker(QObject):
             key = TagStore._key
             for i, p in enumerate(self.paths):
                 if self._cancel:
+                    cancelled()
                     return
                 _pacing.pace(self)                # 260906-8/260908-5(§4 ②·⑦)
                 f = feats.get(p)
