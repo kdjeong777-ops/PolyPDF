@@ -68,7 +68,13 @@ _ss.PORTABLE = False
 try:
     _la = Path(os.environ.get("LOCALAPPDATA") or str(Path.home()))
     _ut = so.user_tessdata_dir()
-    chk(_ut == _la / "PolyPDF" / "tessdata", "(3) 사용자 폴더는 LOCALAPPDATA 아래다", _ut)
+    from viewer.branding import APP_ID as _APP_ID     # 261114-23: 이사 판(1.1.0-beta.14)부터 %LOCALAPPDATA%\PolyPinax — 옛 PolyPDF 는 main 이 옮긴다
+    chk(_ut == _la / _APP_ID / "tessdata", "(3) 사용자 폴더는 LOCALAPPDATA 아래다", _ut)
+    _ss._LOCAL_DIR_OVERRIDE = str(_la / "PolyPDF")    # 개발 실행·옮기기 실패 때 옛 폴더를 함께 쓰면 사용자 tessdata 도 그 아래
+    try:
+        chk(so.user_tessdata_dir() == _la / "PolyPDF" / "tessdata", "(3) 옛 이름 도구 자료 폴더를 쓸 때 사용자 tessdata 도 그 아래(이어짐)")
+    finally:
+        _ss._LOCAL_DIR_OVERRIDE = None
 finally:
     _ss.PORTABLE = _old
 

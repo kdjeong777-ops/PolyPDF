@@ -256,7 +256,8 @@ def _move_to_new_name() -> None:
             return
         if move_profile(old_dir, new_dir) == "fail":
             _ss._DIR_OVERRIDE = str(old_dir)     # 이번 실행은 옛 폴더로 — 다음 실행에서 다시 옮겨 본다
-        move_profile(la / _branding.OLD_ID, la / _branding.APP_ID)
+        if move_profile(la / _branding.OLD_ID, la / _branding.APP_ID) == "fail":
+            _ss._LOCAL_DIR_OVERRIDE = str(la / _branding.OLD_ID)   # 261114-23: 도구 자료(사용자 tessdata 등)도 이번 실행은 옛 폴더로
         copy_reg_tree(r"Software\LocalTools\%s" % _branding.OLD_ID, r"Software\LocalTools\%s" % _branding.APP_ID)
     except Exception:
         pass

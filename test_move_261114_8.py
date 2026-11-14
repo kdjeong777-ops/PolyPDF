@@ -126,6 +126,31 @@ try:
             chk(_ss.local_data_dir() == ol, "N 도구 자료 폴더도 옛 폴더를 따른다(settings_store._LOCAL_DIR_OVERRIDE)")
         finally:
             _ss._LOCAL_DIR_OVERRIDE = None
+    # ── P ── (261114-23) 빌드본: 도구 자료 폴더(%LOCALAPPDATA% — 사용자 tessdata)를 못 옮기면 그 실행은 옛 폴더를 쓴다(설정 폴더와 같은 규칙)
+    if _orig:
+        from PyQt6.QtCore import QStandardPaths
+        QStandardPaths.setTestModeEnabled(True)
+        import viewer.settings_store as _ss
+        la_old = str(Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / b.OLD_ID)
+        main._branding.MOVED = True
+        main.move_profile = lambda o, n: "fail" if str(o) == la_old else "none"
+        main.copy_reg_tree = lambda *a, **k: 0
+        _fz = getattr(sys, "frozen", None)
+        sys.frozen = True
+        _ov = (_ss._DIR_OVERRIDE, getattr(_ss, "_LOCAL_DIR_OVERRIDE", None), _ss.PORTABLE)
+        _ss.PORTABLE = False
+        try:
+            main._move_to_new_name()
+            got = getattr(_ss, "_LOCAL_DIR_OVERRIDE", None)
+        finally:
+            main.move_profile, main.copy_reg_tree = _orig
+            main._branding.MOVED = _was
+            if _fz is None:
+                del sys.frozen
+            else:
+                sys.frozen = _fz
+            _ss._DIR_OVERRIDE, _ss._LOCAL_DIR_OVERRIDE, _ss.PORTABLE = _ov
+        chk(got == la_old, "P 빌드본에서 도구 자료 폴더를 못 옮기면 이번 실행은 옛 폴더(사용자 tessdata 를 잃지 않음)", str(got))
     # ── L ── 정보 창 소스코드 주소·구성요소 저장소
     ab = importlib.import_module("viewer.about")
     chk(ab.SOURCE_URL == "https://github.com/" + b.UPDATE_REPO, "L 정보 창 소스코드 주소 = 지금 저장소(이사 판부터 새 저장소)", ab.SOURCE_URL)
