@@ -33,6 +33,9 @@ TUNING = {
     "FALLBACK_HEAD": 20, "FALLBACK_TAIL": 5,   # §7 미색인 폴백
     "LAYOUT_SAMPLE": 8,        # 레이아웃 표본 페이지 수(결정적 간격 — §12)
     "PRESENT_MIN_AR": 1.3, "PRESENT_MAX_AR": 1.9, "PRESENT_MAX_CHARS": 600,    # §5.3 발표자료(1.9 상한 — 261114-2)
+    # 261114-10(§5.3 ③): 2단으로 빽빽한 가로 쪽 = 접지 설명서 — 쪽 그림 너비 600px, 잉크 < 200(스캔의 옅은 글씨),
+    #   가운데 40~60% 의 가장 빈 띠 잉크가 양쪽 단 평균의 0.1 이하 + 두 단 모두 글 줄 15개 이상, 앞 3쪽의 절반 이상
+    "TWOCOL_W": 600, "TWOCOL_INK": 200, "TWOCOL_GAP": 0.1, "TWOCOL_MIN_LINES": 15, "TWOCOL_PAGES": 0.5,
     "FORMAT_SIM_MIN": 0.30,    # §5.3.2 사람이 고친 종류와 비슷한 본문
     "BROCHURE_MAX_PAGES": 8, "BROCHURE_IMG_RATIO": 0.4,  # §5.3 브로셔
     "ARTICLE_MAX_PAGES": 4,    # §5.3 기사
@@ -112,6 +115,7 @@ class Features:
     terms: Counter = field(default_factory=Counter)   # 가중 tf
     folder_names: list = field(default_factory=list)  # 상위 폴더명(연도 신호용)
     bigrams: dict = field(default_factory=dict)       # 261114-4: 재료에서 되살린 키워드용 두 낱말 묶음(본문 전체 대신, §8.2)
+    twocol: float | None = None   # 261114-10: 앞 3쪽 중 '2단 빽빽' 쪽 비율 — 발표자료 후보 꼴에서만 잰다(None = 안 잼)
 
 
 def _tokenize(text: str) -> list:
@@ -252,6 +256,65 @@ def _one_image(pg):
         return None
 
 
+def _ink_table() -> bytes:
+    return bytes(1 if v < TUNING["TWOCOL_INK"] else 0 for v in range(256))
+
+
+def _two_col_page(pg) -> bool:
+    """§5.3 ③(261114-10) — 쪽 그림만으로: 가운데 빈 세로 띠 + 양쪽 단에 작은 글 줄이 빽빽(글자층 없는 스캔에도)."""
+    import fitz
+    z = TUNING["TWOCOL_W"] / max(1.0, pg.rect.width)
+    pm = pg.get_pixmap(matrix=fitz.Matrix(z, z), colorspace=fitz.csGRAY, alpha=False)
+    w, h, st = pm.width, pm.height, pm.stride
+    if w < 50 or h < 50:
+        return False
+    ink = pm.samples.translate(_ink_table())
+    col = [sum(ink[x:st * h:st]) for x in range(w)]
+    band = max(2, int(w * 0.015))
+    a, b = int(w * 0.40), int(w * 0.60)
+    best = min(range(a, b - band), key=lambda x: sum(col[x:x + band]))
+    mid = sum(col[best:best + band]) / band
+    left = sum(col[:best]) / max(1, best)
+    right = sum(col[best + band:]) / max(1, w - best - band)
+    if min(left, right) <= 0 or mid / min(left, right) > TUNING["TWOCOL_GAP"]:
+        return False
+
+    def lines(x0, x1):
+        thr = max(2, int(0.01 * (x1 - x0)))
+        n, on = 0, False
+        for y in range(h):
+            v = sum(ink[y * st + x0:y * st + x1]) > thr
+            if v and not on:
+                n += 1
+            on = v
+        return n
+    return min(lines(0, best), lines(best + band, w)) >= TUNING["TWOCOL_MIN_LINES"]
+
+
+def two_col_ratio(path) -> float:
+    """앞 3쪽 중 '2단 빽빽' 쪽 비율(못 열면 0)."""
+    try:
+        import fitz
+        d = fitz.open(str(path))
+        try:
+            n = min(3, d.page_count)
+            return (sum(1 for i in range(n) if _two_col_page(d.load_page(i))) / n) if n else 0.0
+        finally:
+            d.close()
+    except Exception:
+        return 0.0
+
+
+def _present_shape(aspect, tpp) -> bool:
+    """§5.3 ③ 발표자료 꼴 — 가로(1.3~1.9) + 쪽당 글자 적음."""
+    return TUNING["PRESENT_MIN_AR"] <= (aspect or 0) <= TUNING["PRESENT_MAX_AR"] and (tpp or 0) < TUNING["PRESENT_MAX_CHARS"]
+
+
+def needs_twocol(d: dict) -> bool:
+    """261114-10: 그 전에 만든 재료(2단 값 없음)인데 발표자료 꼴이면 2단을 더 재야 한다(재료를 통째로 다시 만들지 않게)."""
+    return "twocol" not in d and bool(d.get("page_count")) and _present_shape(d.get("aspect"), d.get("tpp"))
+
+
 # ── 261114-4(태그 SOT §8.2): 태그 재료 — 색인 때 만들어 색인 DB `tagfeat` 에 둔다 ─────────────────
 FEAT_VER = 1                     # 재료 모양·뽑는 법을 바꾸면 올린다(낡은 재료는 다시 만든다)
 FEAT_TERMS_MAX, FEAT_BIGRAMS_MAX = 600, 300
@@ -270,6 +333,7 @@ def features_to_dict(f: "Features") -> dict:
         "img_pages": [list(x) if x else None for x in f.img_pages],
         "terms": dict(Counter(f.terms).most_common(FEAT_TERMS_MAX)),
         "bigrams": dict(bg.most_common(FEAT_BIGRAMS_MAX)),
+        **({"twocol": f.twocol} if f.twocol is not None else {}),
     }
 
 
@@ -285,6 +349,7 @@ def features_from_dict(path, d: dict, folder_names=None) -> "Features":
     f.img_pages = [tuple(x) if x else None for x in d.get("img_pages") or []]
     f.terms = Counter(d.get("terms") or {})
     f.bigrams = dict(d.get("bigrams") or {})
+    f.twocol = d.get("twocol")
     return f
 
 
@@ -319,6 +384,8 @@ def extract_features(path, page_texts=None, folder_names=None,
     f.full_text = "\n".join(pages)
     f.head_text = "\n".join(pages[:TUNING["HEAD_PAGES"]])
     f.text_per_page = raw_chars / max(1, len(page_texts))
+    if open_pdf and f.page_count and _present_shape(f.aspect, f.text_per_page):
+        f.twocol = two_col_ratio(path)           # 261114-10: 발표자료 꼴일 때만(가로 문서만 쪽 그림을 그린다)
 
     # 가중 tf(§4.1 표) — 로그 포화는 점수 계산 시(§3.3.1-②)
     ban = _etal_names(f.full_text)
@@ -341,7 +408,7 @@ def extract_features(path, page_texts=None, folder_names=None,
 
 _EXPLICIT = [   # ① 파일명/표제 명시어 — 순서 = 판정 순서(261113-10: 지침·시방서·기준·법령·시험성적서는 뺐다, 견적서 더함)
     ("설명서", ("설명서", "매뉴얼", "메뉴얼", "사용자", "사용법", "취급", "퀵", "manual", "mnl", "guide",
-             "quick start", "quickstart", "instruction", "_um_")),          # 261114-2 낱말 늘림(§5.3 표)
+             "quick start", "quickstart", "instruction", "_um_", "보증서")),   # 261114-2·-10 낱말 늘림(§5.3 표 — 'warranty' 는 포장 성능보증 문서에 걸려 뺐다)
     ("견적서", ("견적", "quotation")),
     ("영수증", ("영수증", "세금계산서", "거래명세서", "invoice")),
     ("공문", ("공문", "협조요청", "공람")),
@@ -355,7 +422,10 @@ _FOLDER_EXPLICIT = _EXPLICIT + [
 FOLDER_DEPTH = 3
 # ② 설명서 본문 낱말(261114-2) — 앞 3쪽·뒤 2쪽 원문
 _MANUAL_BODY = ("사용설명서", "사용 설명서", "취급설명서", "취급 설명서", "제품 사양", "품질보증", "품질 보증",
-                "user manual", "user's manual", "instruction manual", "operating instructions", "quick start guide")
+                "user manual", "user's manual", "instruction manual", "operating instructions", "quick start guide",
+                "보증서", "warranty card", "limited warranty")       # 261114-10
+# 261114-10: A/S·고객 지원·고객센터·보증 기간·warranty·customer support 는 넣지 않는다 — _samples 실측에서
+#   성능보증 보고서·논문·뉴스·장비 개요 6개를 설명서로 잘못 걸었다(둘 이상 조건으로도). §5.3 표
 
 
 def folder_format(path: str):
@@ -406,7 +476,7 @@ def classify_format(f: Features, rules: dict | None = None, learned: dict | None
                                 or re.search(r"제\s?\d{2,4}\s?[-–]\s?\d+\s?호", txt))):
             fmt = "공문"
         elif any(k in txt for k in _MANUAL_BODY):
-            fmt = "설명서"              # 261114-2
+            fmt = "설명서"              # 261114-2·-10
         elif (("abstract" in txt and "reference" in txt)
               or "doi:" in txt or "doi.org" in txt
               or re.search(r"\bet\s+al\b", txt)):
@@ -420,10 +490,10 @@ def classify_format(f: Features, rules: dict | None = None, learned: dict | None
 
     # ③ 레이아웃 신호(텍스트 불요 — 스캔 PDF 에도 동작 §4.2 각주). 261113-10: 브로셔·기사는 뺐다.
     #   261114-2(사용자 지시): 다단으로 옆으로 긴 쪽(종횡비 > PRESENT_MAX_AR)은 발표자료가 아니다
+    #   261114-10(사용자 지시): 2단으로 작은 글씨가 빽빽한 가로 쪽은 발표자료가 아니라 접지 설명서(글자층 없는 스캔도 쪽 그림으로)
     if fmt is None and f.page_count:
-        if (TUNING["PRESENT_MIN_AR"] <= f.aspect <= TUNING["PRESENT_MAX_AR"]
-                and f.text_per_page < TUNING["PRESENT_MAX_CHARS"]):
-            fmt = "발표자료"
+        if _present_shape(f.aspect, f.text_per_page):
+            fmt = "설명서" if (f.twocol or 0) >= TUNING["TWOCOL_PAGES"] else "발표자료"
 
     # ④ 기본값 — 보고서(조건 못 맞추면 형식 없음).
     #   260830 시정: SOT §5.3 의 '보고서 = 이름 + 목차 + ≥20p' 에서 **목차 조건이 구현에서

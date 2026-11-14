@@ -555,9 +555,19 @@ class PdfIndex:
         if not r or int(r[0]) != int(st.st_size) or abs(float(r[1]) - st.st_mtime) > 1e-6 or int(r[2]) != int(FEAT_VER):
             return None
         try:
-            return _json.loads(r[4]), r[3]
+            d = _json.loads(r[4])
         except Exception:
             return None
+        try:                                   # 261114-10: 그 전 재료에 없는 2단 값만 더 재서 채운다(통째로 다시 만들지 않게)
+            from viewer import auto_tag as _at
+            if _at.needs_twocol(d):
+                d["twocol"] = _at.two_col_ratio(file_path)
+                with self.conn:
+                    self.conn.execute("UPDATE tagfeat SET data=? WHERE key=?",
+                                      (_json.dumps(d, ensure_ascii=False), norm_key(str(file_path))))
+        except Exception:
+            pass
+        return d, r[3]
 
     def make_tagfeat(self, file_path, page_texts=None) -> None:
         """색인한 김에 태그 재료를 만든다(실패해도 색인에는 영향 없음)."""
