@@ -73,6 +73,20 @@ for name, b in (("단어장 편집", sp.btn_edit), ("단어장 Word", sp.btn_wor
 
 # B
 seen = 0
+
+
+def _drawn(b):
+    """그려진 그림의 (폭, 높이) — 알파 > 16 인 점의 상자(장치 독립 px)."""
+    pm = b.icon().pixmap(b.iconSize())
+    im = pm.toImage()
+    dpr = pm.devicePixelRatio() or 1
+    ys = [y for y in range(im.height()) if any(im.pixelColor(x, y).alpha() > 16 for x in range(im.width()))]
+    xs = [x for x in range(im.width()) if any(im.pixelColor(x, y).alpha() > 16 for y in range(im.height()))]
+    if not xs or not ys:
+        return 0, 0
+    return (max(xs) - min(xs) + 1) / dpr, (max(ys) - min(ys) + 1) / dpr
+
+
 for b in mw.findChildren(QAbstractButton):
     if not b.isVisibleTo(mw) or b.icon().isNull() or b.height() <= 0:
         continue
@@ -82,8 +96,12 @@ for b in mw.findChildren(QAbstractButton):
         continue
     seen += 1
     lim = b.height() - 2 * icons.ICON_MARGIN
-    chk(b.iconSize().height() <= lim, "B 여백 %s '%s'" % (type(b).__name__, b.toolTip()[:30] or b.text()),
-        "아이콘 %d > 단추 %d − %d (%s ← %s)" % (b.iconSize().height(), b.height(), 2 * icons.ICON_MARGIN,
+    ih = b.iconSize().height()
+    dw, dh = _drawn(b) if ih > lim else (0, 0)
+    if dw > dh > 0:                  # 가로로 긴 그림(모드 토글 TV)은 그려진 높이로 잰다 — 디자인 SOT §4.6 아이콘 여백(261114-20)
+        ih = int(round(dh))
+    chk(ih <= lim, "B 여백 %s '%s'" % (type(b).__name__, b.toolTip()[:30] or b.text()),
+        "아이콘 %d > 단추 %d − %d (%s ← %s)" % (ih, b.height(), 2 * icons.ICON_MARGIN,
                                            b.objectName(), type(b.parentWidget()).__name__))
 chk(seen >= 8, "B 잰 단추 수 ≥ 8", str(seen))
 

@@ -137,14 +137,17 @@ try:
     chk(not mw._split_on, "D 1단 단추로 1단 복귀")
 
     # E 사진 모드
+    mw._prefs.setdefault("picture", {})["view_kind"] = "mixed"; mw._photo_apply_view_kind()
     mw._set_photo_mode(True); pump(timeout=1.0)
+    chk(mw._photo_mode, "E 준비 — 실제로 사진 모드(261114-20: 종전 기본 PDF 전용에서는 사진 모드가 켜지지 않아 E 가 PDF 모드를 쟀다)")
     mw._set_active_pane(0)
     mw._load_main(HistoryItem(str(photo), 0, "", "bookmark")); pump(lambda: shown(mw._mv[0]) in (key(photo), "yellow"))
     chk(shown(mw._mv[0]) in (key(photo), "yellow"), "E 준비 — 사진 모드 왼쪽에 사진", str(shown(mw._mv[0])))
     click(2)
     chk(mw._split_on, "E 사진 모드도 2단이 켜진다")
     chk(shown(mw._mv[0]) in (key(photo), "yellow"), "E 왼쪽 사진 그대로", str(shown(mw._mv[0])))
-    chk(shown(mw._mv[1]) == "green", "E 오른쪽 창에 컷", str(shown(mw._mv[1])))
+    # 사진 모드는 그림을 사진 문서(경로)로 연다 — 색 대신 그 컷의 경로면 같은 컷이다
+    chk(shown(mw._mv[1]) in ("green", key(shots[2])), "E 오른쪽 창에 컷", str(shown(mw._mv[1])))
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 print("\n=== " + ("ALL PASS" if not fails else f"FAILURE {len(fails)}") + " ===")
