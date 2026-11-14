@@ -265,8 +265,9 @@ def exe_skip_install(out: Path, rec: dict, prev: str = None) -> Path:
 # 261017-18: 가상 프린터 설치 도구(viewer/vprinter.py — 설치 끝에 설치 프로그램이 부른다)·동봉 파일(printer/)도 설치 경로다
 # 261020-2(긴급): requirements.txt 도 — 이 PC 빌드는 이 PC 의 패키지를 쓰므로 CI 가 받는 판(beta.293 의 PyMuPDF 2.0)을 못 본다
 # 261108-13: 업데이트 컨트롤러도 — 설치본 길(U24)·다른 창 닫기(U1·U2)를 고른다
+# 261114-8(SOT 점검): 이름·이사 스위치(viewer/branding.py)도 — MOVED 한 줄이 실행 파일·설치 폴더·설정 폴더·업데이트 저장소를 바꾼다(U26)
 INSTALL_PATHS = ("installer/", "build_ci.bat", "scripts/i18n.py", ".github/workflows/release.yml", "viewer/updater.py",
-                 "viewer/update_controller.py", "viewer/vprinter.py", "printer/", "requirements.txt")
+                 "viewer/update_controller.py", "viewer/vprinter.py", "printer/", "requirements.txt", "viewer/branding.py")
 BUILD_PATHS = ("main.py", "viewer/workers.py", "viewer/index_proc.py", "viewer/kiwi_space.py",
                "viewer/child_job.py", "viewer/indexer.py", "viewer/settings_store.py", "viewer/open_gather.py",
                "viewer/widgets/thumbs_list.py")

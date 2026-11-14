@@ -36,6 +36,9 @@ chk(c["level"] == "install", "A 릴리스 워크플로도 설치 시험", c)
 for p in ("viewer/vprinter.py", "printer/POLYPDF.PPD", "printer/monitor_src/monitor/portlist.cpp"):
     c = rt.classify([("M", p, 2)], diff(p, "+x"))
     chk(c["level"] == "install", "A 가상 프린터 설치 경로(%s)도 설치 시험" % p, c)
+# 261114-8(SOT 점검): 이사 스위치(branding.MOVED) 한 줄 커밋이 설치 폴더·실행 파일·설정 폴더·업데이트 저장소를 바꾼다 — 생략 후보가 아니라 설치 시험
+c = rt.classify([("M", "viewer/branding.py", 2)], diff("viewer/branding.py", "-MOVED = False", "+MOVED = True"))
+chk(c["level"] == "install", "A 이사 스위치(viewer/branding.py)를 바꾸면 설치 시험", c)
 
 # B. 문서·검사·번역문만 → 생략 후보
 c = rt.classify([("M", "README.md", 10), ("M", "test_foo.py", 50), ("M", "resources/locale/en/LC_MESSAGES/polypdf.po", 8)], "")

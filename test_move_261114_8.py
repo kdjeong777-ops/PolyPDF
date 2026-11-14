@@ -93,6 +93,28 @@ try:
     chk(comp.repo_or_default("") == "kdjeong777-ops/PolyPDF", "L 구성요소는 옛 저장소 그대로(보관해도 받는다)")
     nt = importlib.import_module("viewer.study.neural_tts")
     chk(nt.COMPONENTS_BASE.startswith("https://github.com/kdjeong777-ops/PolyPDF/"), "L 자연 음성 구성요소 주소도 옛 저장소")
+    # ── M ── 다리 판 안내는 언어 절 **안**에 — 앱 업데이트 창(split_lang_sections)은 첫 언어 표시 앞 글을 버린다(SOT 점검 261114)
+    sys.path.insert(0, os.path.join(HERE, "scripts"))
+    rn = importlib.import_module("release_notes")
+    amn = getattr(rn, "add_move_notice", None)
+    chk(callable(amn), "M release_notes.add_move_notice 가 있다")
+    if callable(amn):
+        from viewer.widgets.update_dialog import split_lang_sections
+        src = ("<!-- lang:ko -->\n#### 이번 판에서 달라진 점\n\n- 가\n\n"
+               "<!-- lang:en -->\n#### What's new in this version\n\n- a\n")
+        out = amn(src)
+        secs = split_lang_sections(out)
+        chk("PolyPinax" in secs.get("ko", "") and "kdjeong777-ops/PolyPinax" in secs.get("ko", "") and "- 가" in secs.get("ko", ""),
+            "M 한국어 절 안에 '새 이름·새 GitHub' 안내(본문은 그대로)", repr(secs.get("ko", ""))[:120])
+        chk("PolyPinax" in secs.get("en", "") and "moved" in secs.get("en", "") and "- a" in secs.get("en", ""),
+            "M 영어 절 안에 영어 안내", repr(secs.get("en", ""))[:120])
+        chk(out.lstrip().startswith("<!-- lang:"), "M 첫 언어 표시 앞에 글이 없다(앱 창이 버리는 자리)")
+        chk(amn(out) == out, "M 두 번 불러도 한 번만 들어간다")
+        plain = split_lang_sections(amn("#### 바뀐 내용\n- 가\n"))
+        chk("PolyPinax" in plain.get("ko", ""), "M 언어 표시가 없는 옛 꼴도 안내가 보인다")
+    ry2 = read(".github/workflows/release.yml")
+    chk("$move +" not in ry2 and "APP_BRIDGE" in read("scripts/release_notes.py"),
+        "M release.yml 은 노트 맨 앞에 붙이지 않고 release_notes.py 가 다리 판이면 절마다 넣는다")
     # ── C ──
     mp = getattr(main, "move_profile", None)
     chk(callable(mp), "C main.move_profile 이 있다")

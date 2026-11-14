@@ -390,12 +390,8 @@ jobs:
           # 261008-18(마스터 §14.5 U14): --generate-notes 는 PR 기준이라 'Full Changelog' 한 줄만 남았다
           #   → 이전 버전 태그부터의 커밋 메시지로 설명을 만든다(앱 업데이트 창이 보여 준다).
           python scripts/release_notes.py $tag notes.md        # 파일로 직접(UTF-8) — 파이프는 한글이 깨질 수 있다
-          # 261114-8(U26 다리 판): 옛 저장소의 마지막 릴리스 — 맨 앞에 '새 이름·새 GitHub 로 옮김' 두 줄
-          if ($env:APP_BRIDGE -eq '1') {
-            $move = "**PolyPDF 는 PolyPinax 로 이름을 바꾸고 https://github.com/kdjeong777-ops/PolyPinax 로 옮겼습니다.** 설치한 앱은 이 업데이트로 새 이름·새 주소로 넘어가며, 설정·검색 색인은 그대로 이어집니다.`n`n" +
-                    "**PolyPDF is now PolyPinax and has moved to https://github.com/kdjeong777-ops/PolyPinax.** This update moves your installed app to the new name and address; your settings and search index carry over.`n`n"
-            $move + (Get-Content notes.md -Raw -Encoding UTF8) | Out-File -FilePath notes.md -Encoding utf8
-          }
+          #   261114-8(U26 다리 판): APP_BRIDGE=1 이면 release_notes.py 가 '새 이름·새 GitHub 로 옮김' 을 **언어 절마다 맨 위**에 넣는다
+          #   (노트 맨 앞에 붙이면 앱 업데이트 창이 첫 언어 표시 앞 글을 버려 안 보였다 — SOT 점검 261114).
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # 260618-35: --clobber 필수 — 릴리스가 이미 있고(수동 생성 등) 같은 이름 자산이

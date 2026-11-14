@@ -210,6 +210,34 @@ def render(tag: str, prev: str) -> str:
     return "\n".join(out).rstrip("\n") + "\n"
 
 
+# 261114-8(릴리스 SOT §14.5 U26 다리 판): 옛 저장소에 내는 이사 판 — '새 이름·새 GitHub 로 옮김' 을 **언어 절마다 맨 위**에.
+#   앱 업데이트 창(`update_dialog.split_lang_sections`)은 첫 `<!-- lang:… -->` 앞 글을 버리므로 노트 맨 앞에 붙이면 앱에서 안 보인다.
+MOVE_NOTICE = {
+    "ko": ("**PolyPDF 는 PolyPinax 로 이름을 바꾸고 https://github.com/kdjeong777-ops/PolyPinax 로 옮겼습니다.** "
+           "이 업데이트로 설치한 앱이 새 이름·새 주소로 넘어가며, 설정·검색 색인은 그대로 이어집니다."),
+    "en": ("**PolyPDF is now PolyPinax and has moved to https://github.com/kdjeong777-ops/PolyPinax.** "
+           "This update moves your installed app to the new name and address; your settings and search index carry over."),
+}
+
+
+def add_move_notice(text: str) -> str:
+    """언어 절마다 맨 위에 옮김 안내(이미 있으면 그대로). 언어 표시가 없는 옛 꼴은 한·영 두 줄을 맨 앞에."""
+    text = text or ""
+    if MOVE_NOTICE["ko"] in text:
+        return text
+    marks = list(_LANG_MARK.finditer(text))
+    if not marks:
+        return MOVE_NOTICE["ko"] + "\n\n" + MOVE_NOTICE["en"] + "\n\n" + text
+    out, last = [], 0
+    for m in marks:
+        out.append(text[last:m.end()])
+        code = m.group(1).lower()
+        out.append("\n" + MOVE_NOTICE.get(code, MOVE_NOTICE["en"]) + "\n")
+        last = m.end()
+    out.append(text[last:])
+    return "".join(out)
+
+
 def main():
     if len(sys.argv) < 2:
         print("usage: release_notes.py <tag> [out.md]  |  release_notes.py --check <draft.md>", file=sys.stderr)
@@ -226,6 +254,8 @@ def main():
         return 1 if errs else 0
     tag = sys.argv[1]
     text = render(tag, previous_tag(tag))
+    if os.environ.get("APP_BRIDGE") == "1":                 # 261114-8: release.yml 이 옛 저장소에서 이사 판을 낼 때(다리 판)
+        text = add_move_notice(text)
     if len(sys.argv) > 2:
         with open(sys.argv[2], "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
