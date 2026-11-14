@@ -3064,10 +3064,11 @@ class BookmarkTree(QWidget):
         self._bm_restoring = True
         try:
             self.tree.blockSignals(True)
+            was = unit.isExpanded()
             unit.takeChildren()
             for c in self._bm_items_from(snap[1]):
                 unit.addChild(c)
-            unit.setExpanded(True)
+            unit.setExpanded(was or not self.is_collapse_all_mode())   # 261114-12(§4.7.3): 모두 접기 상태면 펼침은 그대로
             self.tree.setCurrentItem(unit)
         finally:
             self.tree.blockSignals(False)
@@ -4708,7 +4709,9 @@ class BookmarkTree(QWidget):
 
     # ---- 260606-4: 책갈피 생성/편집 완료 후 새로고침(목록 유지) ----------
     def _refresh_file_toc(self, item: QTreeWidgetItem):
-        """파일 노드의 내부 책갈피(TOC) 자식을 디스크에서 다시 읽어 갱신."""
+        """파일 노드의 내부 책갈피(TOC) 자식을 디스크에서 다시 읽어 갱신.
+        261114-12(§4.7.3): '모두 접기' 상태면 그 줄의 펼침은 그대로 — 접혀 있던 줄은 접힌 채(책갈피는 펼칠 때 읽는다)."""
+        was = item.isExpanded()
         for i in reversed(range(item.childCount())):
             item.takeChild(i)
         item.setData(0, self.DATA_TOC_LOADED, False)
@@ -4716,6 +4719,8 @@ class BookmarkTree(QWidget):
         if fp:
             self._attach_toc_placeholder(item, Path(fp))
         item.setExpanded(False)
+        if self.is_collapse_all_mode() and not was:
+            return
         item.setExpanded(True)        # itemExpanded → _on_item_expanded 가 lazy load
 
     def add_or_refresh_file(self, file_path: str, after: str = None):
@@ -4764,7 +4769,8 @@ class BookmarkTree(QWidget):
         if self._mode == "flat" and fp not in self._pdfs_flat:
             self._pdfs_flat.append(fp)
         self._place_by_sort(item, fp)                # 261019-7: 고른 정렬대로 제자리에(새로 고침 없이)
-        item.setExpanded(True)
+        if not self.is_collapse_all_mode():          # 261114-12(§4.7.3): 모두 접기 상태면 새 줄도 접힌 채
+            item.setExpanded(True)
         self.tree.setCurrentItem(item)
         self.tree.scrollToItem(item)
 
