@@ -75,9 +75,9 @@ def lock_report(folder) -> str:
     try:
         files = [p for p in Path(folder).iterdir() if p.is_file()]
     except Exception:
-        return "폴더를 읽지 못함"
+        return "cannot list folder"           # 기록 전용(화면 문구 아님) — 영어(다국어 SOT, clipboard_util.diag 선례)
     who = who_locks(files)
-    return ("잠근 프로그램: " + ", ".join(who)) if who else "파일 잠금 없음(폴더 핸들 — 탐색기 창·네트워크 경로·백신 검사 중일 수 있음)"
+    return ("locked by: " + ", ".join(who)) if who else "no file locks (folder handle - Explorer window, network path or antivirus scan?)"
 
 
 def shortcut_folders() -> dict:

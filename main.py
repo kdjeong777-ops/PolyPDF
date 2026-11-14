@@ -173,7 +173,7 @@ def move_profile(old: Path, new: Path, tries: int = 1, wait: float = 0.25, log=N
         return "none"
     if (new / "settings.json").exists():
         if log:
-            log("skip %s → %s (새 폴더에 설정이 있음)" % (old, new))
+            log("skip %s → %s (new folder already has settings)" % (old, new))
         return "skip"
     err = None
     for i in range(max(1, tries)):
@@ -181,13 +181,13 @@ def move_profile(old: Path, new: Path, tries: int = 1, wait: float = 0.25, log=N
             if new.exists():
                 if any(new.iterdir()):
                     if log:
-                        log("skip %s → %s (새 폴더가 비어 있지 않음)" % (old, new))
+                        log("skip %s → %s (new folder not empty)" % (old, new))
                     return "skip"                # 새 폴더에 무엇이 있으면 섞지 않는다
                 new.rmdir()
             new.parent.mkdir(parents=True, exist_ok=True)
             os.rename(old, new)
             if log:
-                log("moved %s → %s%s" % (old, new, (" (%d번째)" % (i + 1)) if i else ""))
+                log("moved %s → %s%s" % (old, new, (" (try %d)" % (i + 1)) if i else ""))
             return "moved"
         except OSError as e:
             err = e
