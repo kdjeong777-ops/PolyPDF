@@ -1,4 +1,4 @@
-﻿# 260618-11/14: 빌드 산출물(dist\PolyPDF)을 릴리스 zip 2종으로 묶는다(수동 릴리스용).
+﻿# 260618-11/14: 빌드 산출물(dist\<EXE_STEM> — 이사 판부터 PolyPinax)을 릴리스 zip 2종으로 묶는다(수동 릴리스용).
 #   1) PolyPDF-v<ver>-win64.zip        : 전체(첫 설치용 — ffmpeg·Tesseract·모델 포함)
 #   2) PolyPDF-v<ver>-win64-update.zip : 업데이트용(안 바뀌는 무거운 부분 제외 → 기존 설치분 보존)
 #   앱 업데이터는 'update' zip 을 우선 받으므로, 업데이트 시 ffmpeg·모델을 다시 안 받음.
@@ -6,22 +6,27 @@
 # 사용: build_ci.bat 빌드 후 -> powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot          # public
-$src  = Join-Path $root "dist\PolyPDF"
-if (-not (Test-Path (Join-Path $src "PolyPDF.exe"))) {
-    Write-Error "빌드 산출물이 없습니다: $src\PolyPDF.exe `n먼저 build_ci.bat 로 빌드하세요."
+# 261114-24: 실행 파일·자산 이름은 viewer/branding.py 에서(이사 판부터 PolyPinax)
+Push-Location $root
+$stem = python -c "from viewer.branding import EXE_STEM;print(EXE_STEM)"
+$pfx  = python -c "from viewer.branding import ASSET_PREFIX;print(ASSET_PREFIX)"
+Pop-Location
+$src  = Join-Path $root "dist\$stem"
+if (-not (Test-Path (Join-Path $src "$stem.exe"))) {
+    Write-Error "빌드 산출물이 없습니다: $src\$stem.exe `n먼저 build_ci.bat 로 빌드하세요."
     exit 1
 }
 $verLine = Select-String -Path (Join-Path $root "viewer\__init__.py") -Pattern '__version__\s*=\s*"([^"]+)"'
 $ver = if ($verLine) { $verLine.Matches[0].Groups[1].Value } else { "0.0.0" }
 
 # 1) 전체(full)
-$full = Join-Path $root "PolyPDF-v$ver-win64.zip"
+$full = Join-Path $root "$pfx-v$ver-win64.zip"
 if (Test-Path $full) { Remove-Item $full -Force }
 Write-Host "full zip 생성 중 (v$ver) ..."
 Compress-Archive -Path (Join-Path $src "*") -DestinationPath $full -CompressionLevel Optimal
 
 # 2) 업데이트(update) — 무거운 불변 부분 제외(스테이징 복사 후 삭제)
-$upd = Join-Path $root "PolyPDF-v$ver-win64-update.zip"
+$upd = Join-Path $root "$pfx-v$ver-win64-update.zip"
 if (Test-Path $upd) { Remove-Item $upd -Force }
 $stage = Join-Path $env:TEMP ("polypdf_upd_stage_" + $ver)
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -53,4 +58,4 @@ Write-Host "생성 완료 (v$ver):"
 Write-Host "  $full   ($mbF MB)  ← 첫 설치 배포용"
 Write-Host "  $upd    ($mbU MB)  ← 자동 업데이트용(앱이 이걸 우선 받음)"
 Write-Host "  + .sha256 2개 (무결성 검증용 — 빠지면 앱이 검증을 생략함)"
-Write-Host "업로드: gh release create v$ver `"$full`" `"$upd`" `"$($shas[0])`" `"$($shas[1])`" --title `"PolyPDF v$ver`" --generate-notes"
+Write-Host "업로드: gh release create v$ver `"$full`" `"$upd`" `"$($shas[0])`" `"$($shas[1])`" --title `"PolyPinax v$ver`" --generate-notes"

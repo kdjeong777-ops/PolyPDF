@@ -29,6 +29,17 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
+      # 261114-24(릴리스 SOT §14.5 U26): 구성요소(`components` 릴리스 — ffmpeg·Tesseract·자연 음성 모델)는 옛 저장소에만 있다.
+      #   이 워크플로가 새 저장소(kdjeong777-ops/PolyPinax)에서 돌아도 branding.COMPONENTS_REPO 에서 받는다(다리 판·새 판 같은 값).
+      #   공개 저장소라 이 실행의 GITHUB_TOKEN 으로 읽힌다(보관(archive)해도 릴리스는 받을 수 있다).
+      - name: Components repo from branding
+        shell: pwsh
+        run: |
+          $comp = python -c "from viewer.branding import COMPONENTS_REPO;print(COMPONENTS_REPO)"
+          if (-not $comp) { throw "branding.COMPONENTS_REPO 를 읽지 못했다" }
+          echo "COMPONENTS_REPO=$comp" >> $env:GITHUB_ENV
+          echo "components from $comp"
+
       # --- 선택: 전체 기능(OCR/녹화)용 바이너리 동봉. 실패해도 핵심 뷰어는 빌드됨 ---
       # 261014-31: 종전에는 `Get-Command ffmpeg` 가 돌려준 **choco shim**(392 KB — ..\lib\ffmpeg\… 를 가리키는 작은 실행 파일)을
       #   복사해, CI 로 만든 모든 배포본의 녹화가 `Cannot find file at '..\lib\ffmpeg\…'` 로 즉시 끝났다(설치 시험 뒤 녹화 시험에서 발견).
@@ -39,7 +50,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download components -R $env:GITHUB_REPOSITORY -p ffmpeg.exe -D .\_ff --clobber
+          gh release download components -R $env:COMPONENTS_REPO -p ffmpeg.exe -D .\_ff --clobber
           # 261108-12(U16): 앱과 같은 고정 SHA-256 으로 확인 — 맞지 않으면 쓰지 않고 choco 로
           if (Test-Path .\_ff\ffmpeg.exe) {
             python -m viewer.components verify ffmpeg.exe .\_ff\ffmpeg.exe
@@ -83,7 +94,7 @@ jobs:
         run: |
           $have = @(".\\tesseract\\tesseract.exe", ".\\tesseract\\Library\\bin\\tesseract.exe") | Where-Object { Test-Path $_ }
           if ($have) { echo "tesseract already staged"; exit 0 }
-          gh release download components -R $env:GITHUB_REPOSITORY -p tesseract.zip -D .\_comp --clobber
+          gh release download components -R $env:COMPONENTS_REPO -p tesseract.zip -D .\_comp --clobber
           python -m viewer.components verify tesseract.zip .\_comp\tesseract.zip      # 261108-12(U16)
           if ($LASTEXITCODE -ne 0) { throw "components tesseract.zip SHA-256 불일치" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -135,7 +146,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download components -R $env:GITHUB_REPOSITORY -p "sherpa-onnx-supertonic-3-tts-int8-*.tar.bz2" -p "Supertonic-3-LICENSE.txt" -D .\_voice --clobber
+          gh release download components -R $env:COMPONENTS_REPO -p "sherpa-onnx-supertonic-3-tts-int8-*.tar.bz2" -p "Supertonic-3-LICENSE.txt" -D .\_voice --clobber
           $arc = Get-ChildItem .\_voice -Filter "sherpa-onnx-supertonic-3-tts-int8-*.tar.bz2" | Select-Object -First 1
           if (-not $arc) { throw "components 릴리스에 자연 음성 모델 묶음이 없다" }
           python -m viewer.components stage-voice $arc.FullName .\_voice\Supertonic-3-LICENSE.txt .\voices
@@ -196,14 +207,15 @@ jobs:
           }
 
       # 261114-8(마스터 §1.1·릴리스 SOT §14.5 U26): 이름은 viewer/branding.py 하나에서 — 이사 스위치(MOVED)가 실행 파일·자산 이름을 정한다.
-      #   bridge(다리 판) = 이사 판을 **옛 저장소**(kdjeong777-ops/PolyPDF)에서 낼 때: 옛 판이 찾는 옛 자산 이름(PolyPDF-…)으로만 올린다.
+      #   bridge(다리 판) = 이사 판을 **옛 저장소**(branding.OLD_REPO)에서 낼 때: 옛 판이 찾는 옛 자산 이름(PolyPDF-…)으로만 올린다.
       #   그 판의 코드는 새 저장소·새 자산 이름을 보므로 옛 사용자는 이 판 하나를 거쳐 새 저장소로 넘어간다.
       - name: Names from branding (EXE_STEM · MOVED · bridge)
         shell: pwsh
         run: |
           $stem = python -c "from viewer.branding import EXE_STEM;print(EXE_STEM)"
           $moved = python -c "from viewer.branding import MOVED;print(1 if MOVED else 0)"
-          $bridge = if ($moved -eq '1' -and '${{ github.repository }}' -eq 'kdjeong777-ops/PolyPDF') { '1' } else { '0' }
+          $oldRepo = python -c "from viewer.branding import OLD_REPO;print(OLD_REPO)"
+          $bridge = if ($moved -eq '1' -and '${{ github.repository }}' -eq $oldRepo) { '1' } else { '0' }
           $pfx = if ($bridge -eq '1') { 'PolyPDF' } else { $stem }
           echo "APP_EXE=$stem" >> $env:GITHUB_ENV
           echo "APP_MOVED=$moved" >> $env:GITHUB_ENV

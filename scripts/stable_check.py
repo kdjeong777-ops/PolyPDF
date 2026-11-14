@@ -231,7 +231,7 @@ def cmd_report(out: Path, online: bool) -> int:
         sys.path.insert(0, str(PUBLIC))
         from viewer import updater
         for ch in ("beta", "stable"):
-            info = updater.check_latest("kdjeong777-ops/PolyPDF", channel=ch) or {}
+            info = updater.check_latest(updater.DEFAULT_REPO, channel=ch)   # 261114-24: branding.UPDATE_REPO or {}
             L.append("- 업데이트 확인(지금 판 %s, %s 채널): 새 판 `%s` · 자산 %s" % (
                 updater.current_version(), ch, info.get("tag"), "있음" if info.get("asset_url") else "없음"))
     ok = not ev and not bad and not real_fatal and real_db.startswith(("ok", "없음"))

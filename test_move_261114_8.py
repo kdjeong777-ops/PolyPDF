@@ -155,6 +155,15 @@ try:
     ry2 = read(".github/workflows/release.yml")
     chk("$move +" not in ry2 and "APP_BRIDGE" in read("scripts/release_notes.py"),
         "M release.yml 은 노트 맨 앞에 붙이지 않고 release_notes.py 가 다리 판이면 절마다 넣는다")
+    # ── O ── (261114-24) 새 저장소에서 돌아도 구성요소(ffmpeg·Tesseract·자연 음성)는 branding.COMPONENTS_REPO(옛 저장소)에서 받는다
+    chk("components -R $env:GITHUB_REPOSITORY" not in ry2 and ry2.count("components -R $env:COMPONENTS_REPO") == 3
+        and "from viewer.branding import COMPONENTS_REPO" in ry2,
+        "O release.yml 구성요소 내려받기 세 곳이 branding.COMPONENTS_REPO 를 본다(새 저장소엔 components 릴리스가 없다)")
+    chk("kdjeong777-ops/PolyPDF" not in ry2.replace("(kdjeong777-ops/PolyPDF)", ""),
+        "O release.yml 에 옛 저장소 이름을 박지 않는다(다리 판 판정도 branding.OLD_REPO)")
+    chk("kdjeong777-ops/PolyPDF\"" not in read("scripts/stable_check.py") and 'dist\\PolyPDF' not in read("scripts/make_release_zip.ps1")
+        and 'dist\\PolyPDF' not in read("scripts/publish_release.ps1"),
+        "O 수동 릴리스·안정 점검 도구도 이름·저장소를 branding 에서")
     # ── C ──
     mp = getattr(main, "move_profile", None)
     chk(callable(mp), "C main.move_profile 이 있다")

@@ -28,12 +28,12 @@ Write-Host "버전 → $Version"
 
 git -C $root add -A
 git -C $root commit -m "v$Version"
-git -C $root tag -a $tag -m "PolyPDF $tag"
+git -C $root tag -a $tag -m "PolyPinax $tag"
 Write-Host "push 중 ... (최초 push 시 브라우저 로그인 창이 뜰 수 있음)"
 git -C $root push origin HEAD
 git -C $root push origin $tag
 
 Write-Host ""
 Write-Host "완료: $tag push 됨 → GitHub Actions(release.yml)가 빌드·릴리스합니다."
-Write-Host "  진행: 저장소 Actions 탭 / 결과: Releases 탭 (PolyPDF-$tag-win64.zip)"
+Write-Host "  진행: 저장소 Actions 탭 / 결과: Releases 탭 (PolyPinax-$tag-win64.zip)"
 Write-Host "  기존 사용자 앱은 '도움말 → 업데이트 확인'에서 자동 감지됩니다."

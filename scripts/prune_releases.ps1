@@ -9,7 +9,7 @@
 #   release.yml 이 릴리스 생성 직후 같은 스크립트를 부른다(GH_TOKEN 필요).
 param(
     [int]$Keep = 10,
-    [string]$Repo = "kdjeong777-ops/PolyPDF",
+    [string]$Repo = "kdjeong777-ops/PolyPinax",     # 261114-24: 이사 판부터 새 저장소(release.yml 은 -Repo 로 지금 저장소를 준다)
     [switch]$DryRun
 )
 $ErrorActionPreference = "Stop"
