@@ -758,14 +758,21 @@ class EditMixin:
                 if not has and not old:
                     box["r"] = (False, "", "")
                     return
-                h = _pm.fingerprint(dict(payload, geom=_pm.geometry(d)))
+                geom = _pm.geometry(d)
+                h = _pm.fingerprint(dict(payload, geom=geom))
                 box["r"] = (h != old, "", h)
+                if h != old:                                  # 261114-22: 다른 것이 태그뿐인가(서명 사전 점검)
+                    if not old:
+                        box["tags_only"] = not (payload["deco"] or payload["img"] or payload["link"])
+                    else:
+                        box["tags_only"] = _pm.fingerprint(dict(payload, tags=_pm.mirrored_tags(d), geom=geom)) == old
             finally:
                 d.close()
         # 261102-4(응답성 SOT §4.4): 여는 일은 배경에서 — 방금 저장한 파일은 백신 검사가 끝날 때까지 `fz_open_file` 이
         #   붙들려 [저장] 뒤 메인이 섰다(_96 10MB 실측 0.81초). 메인은 저장소(꾸밈·링크) 값만 모은다.
         if self._file_op_bg(_probe, tr("저장 중: {name}").format(name=Path(str(path)).name)) is not None:
             return False, "error", ""
+        self._mirror_tags_only = bool(box.get("tags_only"))   # 마지막 판정 — `_mirror_need_kind` 가 읽는다
         return box.get("r", (False, "error", ""))
 
     def _mirror_needed(self, path) -> bool:
@@ -773,6 +780,18 @@ class EditMixin:
             return bool(self._mirror_state(path)[0])
         except Exception:
             return False
+
+    def _mirror_need_kind(self, path) -> str:
+        """PDF 에 아직 안 들어간 것: '' 없음 · 'tags' 태그뿐 · 'other' 꾸밈·사진·하이퍼링크(·회전·크기) 가 섞임.
+        261114-22(보안 SOT §3.5, 사용자 결정 '태그만이면 묻지 않기'): 서명 사전 점검이 태그뿐이면 묻지 않는다."""
+        try:
+            self._mirror_tags_only = False
+            need = bool(self._mirror_state(path)[0])
+        except Exception:
+            return ""
+        if not need:
+            return ""
+        return "tags" if self._mirror_tags_only else "other"
 
     def _mirror_to_pdf(self, path, page=None, reopen=True) -> bool:
         """사본이 낡았으면 원본 사본 + **증분 저장**으로 임시 파일을 만들어 `_finalize_save` 로 놓는다. 넣었으면 True.

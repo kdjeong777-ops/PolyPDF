@@ -319,7 +319,9 @@ class SignMixin(SignDraftMixin):
             pass
         side = False
         try:
-            side = bool(self._mirror_needed(cur))
+            # 261114-22(SOT §3.5, 사용자 결정 '태그만이면 묻지 않기'): PDF 에 아직 안 들어간 것이 태그뿐이면 묻지 않는다 —
+            #   태그는 앱 기록(file_tags.json)에 그대로 있고 다음 '저장' 때 원본 /Keywords 로 들어간다(자동 태그 기본 켬이라 거의 매번 물었다)
+            side = self._mirror_need_kind(cur) == "other"
         except Exception:
             pass
         if dirty or side:

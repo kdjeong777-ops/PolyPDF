@@ -80,6 +80,7 @@ try:
     root = tmp / "folder"; root.mkdir()
 
     # ── A ── 꾸밈 굽기는 보이는 자리 그대로(회전 4가지)
+    import test_fixtures as _TFX; _TFX.autotag_off()   # 261114-22: 저장 뒤 배경 태그 계산이 태그를 바꾸면 D6 '다시 저장해도 그대로' 가 흔들린다(검사 작성 SOT §14.7.2 의 23)
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1200, 820); mw.show(); spin(0.3)
     mw.open_folder(str(root)); spin(0.5)

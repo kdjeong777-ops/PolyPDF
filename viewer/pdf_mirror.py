@@ -294,6 +294,16 @@ def author_keywords(doc) -> str:
     return str((doc.metadata or {}).get("keywords") or "")
 
 
+def mirrored_tags(doc) -> list:
+    """지난 '저장' 이 `/Keywords` 에 넣은 PolyPDF 태그(넣은 차례) — 원래 키워드(`/PolyPDFAuthorKeywords`)를 뺀 나머지.
+    261114-22: 서명 사전 점검이 '태그만 다른지' 를 가린다. 원래 키워드와 같은 태그는 되살리지 못한다(그때는 다르다고 본다 — 묻는 쪽)."""
+    try:
+        orig = {w.lower() for w in _split_kw(author_keywords(doc))}
+        return [w for w in _split_kw((doc.metadata or {}).get("keywords") or "") if w.lower() not in orig]
+    except Exception:
+        return []
+
+
 def set_tag_keywords(doc, tags) -> bool:
     """`/Keywords` = 원래 키워드 + PolyPDF 태그(겹침 없이). 처음 쓸 때 원래 키워드를 `/PolyPDFAuthorKeywords` 에 남긴다.
     태그가 없고 쓴 적도 없으면 건드리지 않는다. 바꿨으면 True."""
