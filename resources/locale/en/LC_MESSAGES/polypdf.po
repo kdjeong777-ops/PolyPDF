@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  PolyPDF\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-14 07:15+0900\n"
+"POT-Creation-Date: 2026-11-14 11:53+0900\n"
 "PO-Revision-Date: 2026-10-09 09:12+0900\n"
 "Last-Translator: KDJ (PolyPDF)\n"
 "Language: en\n"
@@ -544,12 +544,12 @@ msgid "책갈피 생성 중단"
 msgstr "Bookmark Generation Stopped"
 
 #: viewer/app.py viewer/compare_controller.py viewer/jobs_controller.py
-#: viewer/print_controller.py viewer/update_controller.py
-#: viewer/widgets/glossary_edit_dialog.py viewer/widgets/hyperlink_dialog.py
-#: viewer/widgets/image_tune_dialog.py viewer/widgets/stamp_dialog.py
-#: viewer/widgets/tag_apply_dialog.py viewer/widgets/translate_dialog.py
-#: viewer/widgets/translate_files_dialog.py viewer/widgets/update_dialog.py
-#: viewer/widgets/vprinter_dialog.py
+#: viewer/photo_controller.py viewer/print_controller.py
+#: viewer/update_controller.py viewer/widgets/glossary_edit_dialog.py
+#: viewer/widgets/hyperlink_dialog.py viewer/widgets/image_tune_dialog.py
+#: viewer/widgets/stamp_dialog.py viewer/widgets/tag_apply_dialog.py
+#: viewer/widgets/translate_dialog.py viewer/widgets/translate_files_dialog.py
+#: viewer/widgets/update_dialog.py viewer/widgets/vprinter_dialog.py
 msgid "닫기"
 msgstr "Close"
 
@@ -1291,6 +1291,7 @@ msgstr "Open a PDF first."
 msgid "저장을 취소했습니다 — 원본은 그대로입니다."
 msgstr "Save canceled — the original is unchanged."
 
+# | 덮어쓰면, 그 창은 바뀐 파일을 옛 상태로 읽어 화면이 깨지거나 오류가 날 수 있습니다."
 #: viewer/app.py
 #, python-brace-format
 msgid ""
@@ -3129,6 +3130,11 @@ msgstr "Right folder loaded: {folder}"
 msgid "폴더 로드: {folder}"
 msgstr "Folder loaded: {folder}"
 
+#: viewer/app.py viewer/workers.py
+#, python-brace-format
+msgid "남은 시간 약 {m}분"
+msgstr "about {m} min left"
+
 #: viewer/app.py
 #, python-brace-format
 msgid "검색 오류: {e}"
@@ -3324,6 +3330,7 @@ msgstr "Failed: {e}"
 msgid "'{name}' 을(를) 다시 열었습니다(저장됨)."
 msgstr "Reopened '{name}' (saved)."
 
+# | 다시 열까요?"
 #: viewer/app.py
 #, python-brace-format
 msgid ""
@@ -6231,6 +6238,7 @@ msgstr ""
 "\n"
 "Extract to: {here}"
 
+# | 자료까지 함께 봅니다 — 원본 PDF 는 바뀌지 않습니다."
 #: viewer/share_controller.py
 #, python-brace-format
 msgid ""
@@ -7560,14 +7568,6 @@ msgstr "Applying the update with administrator rights..."
 
 #: viewer/updater.py
 msgid ""
-"업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
-"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
-msgstr ""
-"Administrator rights are needed to apply the update. The request was canceled, so the update was not applied.\n"
-"Download the latest installer ({setup}) and 'Run as administrator'."
-
-#: viewer/updater.py
-msgid ""
 "업데이트 파일이 손상되었거나 변조되었습니다(무결성 검증 실패).\n"
 "안전을 위해 설치를 중단했습니다.\n"
 "\n"
@@ -7609,6 +7609,17 @@ msgstr ""
 "An error occurred while applying the update.\n"
 "{msg}"
 
+# | 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
+#: viewer/updater.py
+#, python-brace-format
+msgid ""
+"업데이트 적용에는 관리자 권한이 필요합니다. 권한 요청이 취소되어 업데이트하지 못했습니다.\n"
+"최신 설치본({setup})을 받아 '관리자 권한으로 실행'해 주세요."
+msgstr ""
+"Administrator rights are needed to apply the update. The request was canceled, so the update was not applied.\n"
+"Download the latest installer ({setup}) and 'Run as administrator'."
+
+# | 설치본(PolyPDF-Setup-*.exe)을 받아 '관리자 권한으로 실행'해 주세요."
 #: viewer/updater.py
 #, python-brace-format
 msgid ""
@@ -7618,6 +7629,7 @@ msgstr ""
 "The update could not be finished because some folders are not writable ({n}). The administrator request was canceled.\n"
 "Download the latest installer ({setup}) and 'Run as administrator'."
 
+# | 설치본(PolyPDF-Setup-*.exe)을 '관리자 권한으로 실행'해 주세요."
 #: viewer/updater.py
 #, python-brace-format
 msgid ""
@@ -15277,11 +15289,6 @@ msgstr "Reading page {pg}…"
 #, python-brace-format
 msgid "{p}쪽 글자층 쓰는 중…"
 msgstr "Writing text layer on page {p}…"
-
-#: viewer/workers.py
-#, python-brace-format
-msgid "남은 시간 약 {m}분"
-msgstr "about {m} min left"
 
 #: viewer/workers.py
 #, python-brace-format
