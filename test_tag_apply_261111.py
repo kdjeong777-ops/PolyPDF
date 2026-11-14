@@ -53,6 +53,9 @@ try:
     for p in (A, B, C, D):
         pdf(p)
     from viewer.app import MainWindow
+    # 261114-22 덧붙임: 이 검사는 창의 [적용]·[해제]·되돌리기를 본다 — 폴더를 열면 도는 배경 태그 계산(기본 켬)이 심어 둔 자동 '보고서' 를
+    #   다시 판정한 '스캔문서' 로 바꾸면 C 가 흔들린다(계산이 C 보다 먼저 끝나는지에 달림, 검사 작성 SOT §14.7.2 의 23)
+    import test_fixtures as _TFX; _TFX.autotag_off()
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1100, 700); mw.show(); pump(lambda: False, 0.3)
     bt = mw.bookmark_tree
