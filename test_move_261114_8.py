@@ -133,7 +133,7 @@ try:
         import viewer.settings_store as _ss
         la_old = str(Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / b.OLD_ID)
         main._branding.MOVED = True
-        main.move_profile = lambda o, n: "fail" if str(o) == la_old else "none"
+        main.move_profile = lambda o, n, **k: "fail" if str(o) == la_old else "none"
         main.copy_reg_tree = lambda *a, **k: 0
         _fz = getattr(sys, "frozen", None)
         sys.frozen = True
@@ -217,6 +217,82 @@ try:
             fh.close()
         chk(r3 in ("fail", "moved") and (o2 / "settings.json").exists() if r3 == "fail" else True,
             "C 옮기지 못하면 'fail' — 옛 폴더는 그대로(부르는 쪽이 옛 폴더를 쓴다)", r3)
+        # (261114-23 덧붙임 2 — beta.14 설치 시험에서 실제 설정 폴더가 안 옮겨졌는데 기록이 없었다) 다시 해 보기·기록·잠근 프로그램
+        o3, n3 = tmp / "o3", tmp / "n3"
+        o3.mkdir()
+        (o3 / "index.db").write_bytes(b"x")
+        lines = []
+        fh = open(o3 / "index.db", "rb")
+        try:
+            r4 = mp(o3, n3, tries=2, wait=0.05, log=lines.append)
+        finally:
+            fh.close()
+        if r4 == "fail":
+            chk(lines and lines[-1].startswith("fail") and "winerror=" in lines[-1] and ("(%d)" % os.getpid()) in lines[-1],
+                "C 실패를 기록한다 — Windows 오류·잠근 프로그램(이 검사 프로세스)", repr(lines)[:300])
+            r5 = mp(o3, n3, tries=2, wait=0.05, log=lines.append)
+            chk(r5 == "moved" and (n3 / "index.db").exists() and lines[-1].startswith("moved"),
+                "C 잠금이 풀린 다음 실행에서 다시 옮긴다", r5)
+        else:
+            chk(False, "C 열린 파일이 있는 폴더 이름 바꾸기가 실패해야 기록 검사를 할 수 있다(이 PC 에서 성공)", r4)
+        import viewer.move_fix as _mf
+        logdir = tmp / "lt"
+        _mf.move_log(logdir, "hello")
+        chk((logdir / (b.APP_ID + "-move.log")).read_text(encoding="utf-8").strip().endswith("hello"),
+            "C 기록 파일은 LocalTools 바로 아래 <APP_ID>-move.log(옛·새 폴더 밖)")
+    # ── Q ── (261114-23 덧붙임 2) 죽은 옛 바로가기(사용자 시작 메뉴·바탕 화면·작업 표시줄 고정)를 지금 실행 파일로 — 실제 .lnk 로
+    import viewer.move_fix as _mf
+    try:
+        import win32com.client
+        sh = win32com.client.Dispatch("WScript.Shell")
+    except Exception:
+        sh = None
+    chk(sh is not None, "Q WScript.Shell 로 바로가기를 만들 수 있다")
+    if sh is not None:
+        qd = {"programs": [tmp / "q_prog"], "desktop": [tmp / "q_desk"], "taskbar": [tmp / "q_bar"]}
+        for v in qd.values():
+            v[0].mkdir()
+        gone = str(tmp / "Program Files" / "PolyPDF" / "PolyPDF.exe")       # 이사 판 설치가 지운 옛 실행 파일
+        alive = tmp / "alive" / "PolyPDF.exe"
+        alive.parent.mkdir()
+        alive.write_bytes(b"MZ")                                            # 휴대용 다리 판처럼 옛 이름 실행 파일이 살아 있으면 그대로
+        newexe = tmp / "Program Files" / "PolyPinax" / "PolyPinax.exe"
+        newexe.parent.mkdir(parents=True)
+        newexe.write_bytes(b"MZ")
+
+        def mk(path, target):
+            s = sh.CreateShortcut(str(path))
+            s.TargetPath = str(target)
+            s.Save()
+        mk(qd["programs"][0] / "PolyPDF.lnk", gone)
+        mk(qd["desktop"][0] / "PolyPDF.lnk", gone)
+        mk(qd["taskbar"][0] / "PolyPDF.lnk", gone)
+        mk(qd["desktop"][0] / "PolyPDF 휴대용.lnk", alive)
+        mk(qd["desktop"][0] / "Other.lnk", gone)                            # 이름에 옛 이름이 없으면 건드리지 않는다
+        done = _mf.repair_shortcuts(str(newexe), qd, aumid="LocalTools.PolyPinax")
+        tgt = lambda p: sh.CreateShortcut(str(p)).TargetPath
+        chk((qd["programs"][0] / "PolyPinax.lnk").exists() and not (qd["programs"][0] / "PolyPDF.lnk").exists()
+            and tgt(qd["programs"][0] / "PolyPinax.lnk").lower() == str(newexe).lower(),
+            "Q 시작 메뉴 — 죽은 PolyPDF.lnk 가 PolyPinax.lnk 로, 대상은 지금 실행 파일", str(done))
+        chk((qd["desktop"][0] / "PolyPinax.lnk").exists(), "Q 바탕 화면도 같은 규칙")
+        chk((qd["taskbar"][0] / "PolyPDF.lnk").exists() and tgt(qd["taskbar"][0] / "PolyPDF.lnk").lower() == str(newexe).lower(),
+            "Q 작업 표시줄 고정 — 이름은 그대로(고정 항목), 대상만 지금 실행 파일")
+        chk(tgt(qd["desktop"][0] / "PolyPDF 휴대용.lnk").lower() == str(alive).lower() and tgt(qd["desktop"][0] / "Other.lnk").lower() == gone.lower(),
+            "Q 살아 있는 대상·이름에 옛 이름이 없는 바로가기는 건드리지 않는다")
+        try:
+            import pythoncom
+            from win32com.propsys import propsys, pscon
+            st = propsys.SHGetPropertyStoreFromParsingName(str(qd["taskbar"][0] / "PolyPDF.lnk"))
+            aum = st.GetValue(pscon.PKEY_AppUserModel_ID).GetValue()
+        except Exception as e:
+            aum = repr(e)
+        chk(aum == "LocalTools.PolyPinax", "Q 작업 표시줄 고정의 앱 ID 도 새 이름(창과 같은 단추로 묶이게)", aum)
+        chk(len(done) == 3 and _mf.repair_shortcuts(str(newexe), qd) == [], "Q 고친 것은 셋, 다시 불러도 할 일 없음", str(done))
+    chk("--hidden-import win32com.propsys" in read("build_ci.bat") and "--hidden-import win32com.shell" in read("build_ci.bat"),
+        "Q 빌드본에 바로가기 앱 ID 쓰기(propsys·shell)를 넣는다")
+    main_src = read("main.py")
+    chk("repair_shortcuts(sys.executable" in main_src and "tries=3, log=_log" in main_src,
+        "Q·C main 이 빌드본 첫 실행에 바로가기를 고치고, 설정 폴더 옮기기를 다시 해 보며 기록한다")
     # ── D ──
     cr = getattr(main, "copy_reg_tree", None)
     chk(callable(cr), "D main.copy_reg_tree 가 있다")

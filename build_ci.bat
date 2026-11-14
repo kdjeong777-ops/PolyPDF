@@ -219,6 +219,8 @@ python -m PyInstaller ^
     --hidden-import lameenc ^
     --hidden-import win32com ^
     --hidden-import win32com.client ^
+    --hidden-import win32com.shell ^
+    --hidden-import win32com.propsys ^
     --hidden-import pythoncom ^
     --hidden-import pywintypes ^
     --hidden-import openpyxl ^

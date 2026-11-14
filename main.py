@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import os
 import shutil
+import time
 from pathlib import Path
 
 
@@ -161,25 +162,45 @@ def _setup_portable() -> str:
         return ""
 
 
-def move_profile(old: Path, new: Path) -> str:
+def move_profile(old: Path, new: Path, tries: int = 1, wait: float = 0.25, log=None) -> str:
     """261114-8(마스터 §1.1, 이사 판): 옛 설정 폴더 → 새 이름. 'none'(옛 폴더 없음) · 'skip'(새 폴더에 설정이 이미 있음 — 둘 다 그대로) ·
     'moved'(이름 바꿈 — 같은 드라이브라 큰 색인도 즉시, 복사하지 않는다) · 'fail'(열린 파일 등 — 옛 폴더 그대로, 부르는 쪽이 옛 폴더를 쓴다).
-    옛 폴더를 지우는 일은 없다(이름만 바뀐다) — 사용자 색인을 지운 사고(마스터 §14.2.1)를 되풀이하지 않게."""
+    옛 폴더를 지우는 일은 없다(이름만 바뀐다) — 사용자 색인을 지운 사고(마스터 §14.2.1)를 되풀이하지 않게.
+    261114-23 덧붙임 2(beta.14 설치 시험): 폴더 안 파일 하나라도 다른 프로그램이 열어 두면 이름 바꾸기가 실패한다 — `tries` 번 다시 해 보고,
+    `log(글)` 이 있으면 결과·Windows 오류·잠근 프로그램을 남긴다(다음 실행이 다시 해 본다)."""
     old, new = Path(old), Path(new)
     if not old.is_dir():
         return "none"
     if (new / "settings.json").exists():
+        if log:
+            log("skip %s → %s (새 폴더에 설정이 있음)" % (old, new))
         return "skip"
-    try:
-        if new.exists():
-            if any(new.iterdir()):
-                return "skip"                    # 새 폴더에 무엇이 있으면 섞지 않는다
-            new.rmdir()
-        new.parent.mkdir(parents=True, exist_ok=True)
-        os.rename(old, new)
-        return "moved"
-    except OSError:
-        return "fail"
+    err = None
+    for i in range(max(1, tries)):
+        try:
+            if new.exists():
+                if any(new.iterdir()):
+                    if log:
+                        log("skip %s → %s (새 폴더가 비어 있지 않음)" % (old, new))
+                    return "skip"                # 새 폴더에 무엇이 있으면 섞지 않는다
+                new.rmdir()
+            new.parent.mkdir(parents=True, exist_ok=True)
+            os.rename(old, new)
+            if log:
+                log("moved %s → %s%s" % (old, new, (" (%d번째)" % (i + 1)) if i else ""))
+            return "moved"
+        except OSError as e:
+            err = e
+            if i + 1 < tries:
+                time.sleep(wait)
+    if log:
+        try:
+            from viewer.move_fix import lock_report
+            rep = lock_report(old)
+        except Exception:
+            rep = ""
+        log("fail %s → %s — winerror=%s %s · %s" % (old, new, getattr(err, "winerror", None), getattr(err, "strerror", err), rep))
+    return "fail"
 
 
 def copy_reg_tree(src: str, dst: str) -> int:
@@ -254,9 +275,11 @@ def _move_to_new_name() -> None:
             if plan["local"]:
                 _ss._LOCAL_DIR_OVERRIDE = plan["local"]
             return
-        if move_profile(old_dir, new_dir) == "fail":
+        from viewer.move_fix import move_log
+        _log = lambda t: move_log(new_dir.parent, t)   # 261114-23 덧붙임 2: %APPDATA%\LocalTools\<APP_ID>-move.log (두 폴더 밖)
+        if move_profile(old_dir, new_dir, tries=3, log=_log) == "fail":
             _ss._DIR_OVERRIDE = str(old_dir)     # 이번 실행은 옛 폴더로 — 다음 실행에서 다시 옮겨 본다
-        if move_profile(la / _branding.OLD_ID, la / _branding.APP_ID) == "fail":
+        if move_profile(la / _branding.OLD_ID, la / _branding.APP_ID, tries=3, log=_log) == "fail":
             _ss._LOCAL_DIR_OVERRIDE = str(la / _branding.OLD_ID)   # 261114-23: 도구 자료(사용자 tessdata 등)도 이번 실행은 옛 폴더로
         copy_reg_tree(r"Software\LocalTools\%s" % _branding.OLD_ID, r"Software\LocalTools\%s" % _branding.APP_ID)
     except Exception:
@@ -271,6 +294,16 @@ def _repair_progids() -> None:
     try:
         from viewer.pdf_default import Reg, repair_user_progids
         repair_user_progids(Reg(), sys.executable)
+    except Exception:
+        pass
+    try:
+        # 261114-23 덧붙임 2(beta.14 설치 시험): 옛 Program Files\PolyPDF 가 지워져 죽은 사용자 바로가기·작업 표시줄 고정을 지금 실행 파일로
+        from viewer.move_fix import repair_shortcuts, shortcut_folders, move_log
+        done = repair_shortcuts(sys.executable, shortcut_folders(), aumid=_branding.AUMID)
+        for a, b in done:
+            from PyQt6.QtCore import QStandardPaths
+            move_log(Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)).parent,
+                     "shortcut %s → %s" % (a, b))
     except Exception:
         pass
 
