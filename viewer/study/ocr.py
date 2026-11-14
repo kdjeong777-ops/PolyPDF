@@ -445,24 +445,8 @@ def _overlaid_ocr_layer(page) -> bool:
         from viewer.text_extract2 import _is_ocr_layer
     except Exception:
         return False
-    if _no_invisible_text(page):
-        return False                       # 261114-11(§14.18): 내용 흐름에 `3 Tr` 가 없다 — 쪽을 돌려 볼 것도 없다
     try:
-        return bool(_is_ocr_layer(page))
-    except Exception:
-        return False
-
-
-_TR3_RE = re.compile(rb"(?<![0-9.])3\s+Tr\b")
-
-
-def _no_invisible_text(page) -> bool:
-    """render mode 3(안 보임) 글자가 **있을 수 없는** 쪽인가 — 내용 흐름에 `3 Tr` 가 없고 폼 XObject 도 없다(폼 안은 보지 않으므로 그때는 모른다).
-    261114-11: 작은 그림 수만 개로 깐 쪽은 `get_texttrace` 한 번이 0.26~0.67초(TRB9.pdf) — 바이트 찾기는 0.1초 안. 모르면 False(종전대로 돌려 본다)."""
-    try:
-        if page.get_xobjects():
-            return False
-        return _TR3_RE.search(page.read_contents() or b"") is None
+        return bool(_is_ocr_layer(page))   # 261114-11: 내용 흐름에 `3 Tr` 가 없으면 그 안에서 바로 '아니다'(텍스트 창 SOT §3.5)
     except Exception:
         return False
 

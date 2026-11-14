@@ -124,6 +124,12 @@ study_ocr.ocr_image = fake_ocr
 mw = MainWindow(); mw.resize(1300, 900); mw.show(); app.processEvents()
 try:
     mw._load_main(HistoryItem(src, 0, "", "bookmark")); app.processEvents(); QTest.qWait(200)
+    # 261114-11: 열기 뒤 텍스트 창은 한 박자 뒤(TEXT_FOLLOW_MS)에 따라가고 워커가 줄을 넣는다 — 그것이 끝난 뒤에 줄을 바꿔야
+    #   늦게 온 워커 결과가 아래에서 넣은 줄·늘린 상자를 덮지 않는다(종전 '처음 실패·다시 통과' 흔들림이 이 경합이었다)
+    for _ in range(100):
+        if not mw._lite_follow.isActive() and getattr(mw, "_text_worker", None) is None:
+            break
+        app.processEvents(); QTest.qWait(30)
     m = mw.main_view
     tp = mw.text_panel
     # 텍스트 창에 이은 줄 하나(원래 줄 넷) — 실제 추출로

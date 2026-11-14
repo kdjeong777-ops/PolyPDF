@@ -15,7 +15,7 @@
   scanned_pdf()  스캔 모사 — 페이지가 **이미지 뿐**이라 텍스트 레이어가 없음, 14쪽
                  (`_pdf_is_scanned` → True. 앞 12쪽 표본의 60% 이상이 'ocr' 로 판정되면 참)
   image_strips_pdf() 그림 전용 — 가상 프린터·사진→PDF 꼴, 쪽마다 2048px Flate 그림 띠(261107-19, 응답성 SOT §7.5)
-  tiled_bg_pdf()   발표 슬라이드 꼴 — 첫 쪽 질감 배경을 4×4pt 그림 1만 4천 번으로 깔아 쪽 훑기가 비싸다(261114-11, 응답성 SOT §6)
+  tiled_bg_pdf()   발표 슬라이드 꼴 — 첫 쪽 질감 배경을 4×4pt 내장 그림(BI) 6만 9천 번으로 깔아 쪽 훑기가 비싸다(261114-11, 응답성 SOT §6)
   paragraph_pdf()  양쪽 맞춤 한글 문단으로 꽉 찬 3쪽 + 제목·목록 줄, 설치 안 된 CJK 글꼴(261113-3, 형식 변환 쪽 맞춤·줄 잇기)
   ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
                  (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
@@ -33,7 +33,7 @@
 import os
 from pathlib import Path
 
-_VER = "v3"
+_VER = "v5"
 _DIR = Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".") / f"polypdf_fixtures_{_VER}"
 
 # TOC — 계층(레벨 1/2)을 섞어 트리 구성까지 검사되게 한다.
@@ -146,25 +146,25 @@ def image_strips_pdf() -> str:
     return str(p)
 
 
-_TILE_N = 14000
+_TILE_N = 69000
 
 
 def _build_tiled_bg_pdf(dst: Path) -> None:
-    """261114-11(응답성 SOT §6 표·단어학습 SOT §14.18): 발표 슬라이드 꼴 — 첫 쪽 질감 배경을 **4×4pt 그림 하나를 1만 4천 번** 깔고
-    그 위에 보이는 영문 글(가로 쪽). 실제 TRB9.pdf 는 23,296번 — 쪽 내용을 한 번 훑는 데 0.25~1초라 메인에서 여러 번 훑으면 선다. 2~5쪽은 보통 글."""
+    """261114-11(응답성 SOT §6 표·단어학습 SOT §14.18): 발표 슬라이드 꼴 — 첫 쪽 질감 배경을 **4×4pt 내장 그림(BI, 16×16 1비트)** 6만 9천 번 깔고
+    그 위에 보이는 영문 글(가로 쪽). 실제 TRB9.pdf 는 CCITT 내장 그림 23,296개 — 쪽 내용을 한 번 훑는 데 0.2~0.67초라 메인·배경에서 여러 번 훑으면 선다.
+    이 픽스처 한 번 훑기는 약 0.3초(무압축이라 개수를 늘렸다). 2~5쪽은 보통 글."""
     import fitz
     doc = fitz.open()
     W, H = 842.0, 595.0
     p = doc.new_page(width=W, height=H)
-    tile = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 8, 8), False)
-    tile.set_rect(tile.irect, (90, 90, 90))
-    p.insert_image(fitz.Rect(0, 0, 4, 4), pixmap=tile)     # 그림 하나(자원 이름을 얻는다)
-    name = p.get_images(full=True)[0][7]
+    p.insert_text((1, 1), " ", fontsize=1)                  # 내용 흐름 하나를 만든다(아래에서 갈아 끼운다)
     cols = int(W // 4)
-    ops = [b"q 4 0 0 4 %d %d cm /%s Do Q" % ((k % cols) * 4, int(H) - 4 - (k // cols) * 4, name.encode())
-           for k in range(_TILE_N)]                          # insert_image 1만 4천 번은 몇 분 — 내용 흐름을 한 번에 쓴다
+    mask = bytes((k * 37) & 0xFF for k in range(32))        # 16×16 1비트 무늬
+    # TRB9.pdf 와 같은 꼴 — 내장 그림(BI … ID … EI, 16×16 1비트 마스크)을 칸마다. 그림 객체를 부르는 Do 와 달리 쪽을 훑을 때마다 그림을 다시 읽는다
+    ops = [b"q 4 0 0 4 %d %d cm BI /IM true /W 16 /H 16 /BPC 1 /D [1 0] ID " % ((k % cols) * 4, int(H) - 4 - (k // cols) * 4)
+           + mask + b" EI Q" for k in range(_TILE_N)]
     cx = p.get_contents()[0]
-    doc.update_stream(cx, b"\n".join(ops) + b"\n")
+    doc.update_stream(cx, b"0.35 0.35 0.35 rg\n" + b"\n".join(ops) + b"\n")
     p.insert_text((60, 300), "Accelerated Pavement Testing and Modelling in South Africa", fontsize=22)
     p.insert_text((60, 340), "Materials and pavement specialist workshop presentation", fontsize=16)
     for i in range(4):
@@ -175,7 +175,7 @@ def _build_tiled_bg_pdf(dst: Path) -> None:
 
 
 def tiled_bg_pdf() -> str:
-    """첫 쪽 배경을 작은 그림 1만 4천 개로 깐 발표 PDF(5쪽, 가로) 경로 — 쪽 훑기가 비싼 쪽(261114-11)."""
+    """첫 쪽 배경을 작은 내장 그림 6만 9천 개로 깐 발표 PDF(5쪽, 가로) 경로 — 쪽 훑기가 비싼 쪽(261114-11)."""
     d = _ensure_dir()
     p = d / "sample_tiled_bg.pdf"
     if not p.exists() or p.stat().st_size == 0:

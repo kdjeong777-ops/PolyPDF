@@ -240,7 +240,10 @@ def _is_ocr_layer(page) -> bool:
 
     스캔본은 그림 위에 render mode 3(보이지 않음)으로 글자를 얹는다. 그 층에는 OCR 이
     종이의 티를 글자로 잘못 읽은 것이 섞여 있어, 잡음 거르기는 **이런 쪽에만** 한다 —
-    사람이 넣은 작은 글씨를 지우면 안 된다."""
+    사람이 넣은 작은 글씨를 지우면 안 된다.
+    261114-11(SOT §3.5): 내용 흐름에 `3 Tr` 가 없으면(`no_invisible_text`) 쪽을 돌려 보지 않고 '아니다'."""
+    if no_invisible_text(page):
+        return False
     try:
         traces = page.get_texttrace()
     except Exception:
@@ -249,6 +252,21 @@ def _is_ocr_layer(page) -> bool:
         return False
     inv = sum(1 for sp in traces if sp.get("type") == 3)
     return inv >= len(traces) * 0.9
+
+
+import re as _re
+_TR3_RE = _re.compile(rb"(?<![0-9.])3\s+Tr\b")
+
+
+def no_invisible_text(page) -> bool:
+    """render mode 3(안 보임) 글자가 **있을 수 없는** 쪽인가 — 내용 흐름에 `3 Tr` 가 없고 폼 XObject 도 없다(폼 안은 보지 않으므로 그때는 모른다).
+    261114-11(SOT §3.5): 작은 그림 수만 개로 깐 쪽은 `get_texttrace` 한 번이 0.2~0.67초(TRB9.pdf) — 바이트 찾기는 0.1초 안. 모르면 False."""
+    try:
+        if page.get_xobjects():
+            return False
+        return _TR3_RE.search(page.read_contents() or b"") is None
+    except Exception:
+        return False
 
 
 def text_dict(page, raw: bool = True, **kw) -> dict:
@@ -838,6 +856,8 @@ def _table_cells(frags, page):
     판정은 **행마다** 한다. 칸이 모두 한 줄인 행(점검표의 `항목 | YES NO`)은 종전대로
     한 줄로 잇는 편이 낫다 — 그 줄은 실제로 한 줄이기 때문이다.
     """
+    if len(frags) < 6:
+        return None                  # 261114-11(SOT §3.6.5): 표 안 조각은 쪽 조각의 일부 — 6 미만이면 선을 읽을 것도 없다(같은 답)
     rules = _hrules(page)
     if len(rules) < 2:
         return None

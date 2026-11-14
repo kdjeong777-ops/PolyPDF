@@ -7,7 +7,7 @@
 그림 자리 읽기·`fitz.Rect` 2만 3천 개)을 본문·텍스트 창·쪽 낱말에서 여러 번, 쪽 낱말(`_view_src`)을 그릴 때마다, 썸네일이 표지를 또 그려
 한 번 열기에 메인 8.6초·↑↓ 넘김 중 15~19초 정지.
 
-픽스처 `test_fixtures.tiled_bg_pdf()` — 첫 쪽에 4×4pt 그림 1만 4천 번 + 보이는 영문 글(같은 성질).
+픽스처 `test_fixtures.tiled_bg_pdf()` — 첫 쪽에 4×4pt 내장 그림(BI, 16×16 1비트) 6만 9천 번 + 보이는 영문 글(같은 성질 — 쪽 한 번 훑기 0.3초).
 A. 글자층 판정은 같은 답이고, 두 번째부터는 기억한 것(다른 문서 객체로 같은 파일을 물어도)
 B. 안 보이는 층이 아니면 그림 점유율을 재지 않는다 — 안 보이는 OCR 층 스캔 쪽은 종전대로 'ocr'(scanned-page)
 C. 실제 MainWindow 로 열 때: 쪽 낱말을 읽지 않는다(끌어 고르기를 시작하면 읽는다)
@@ -77,7 +77,7 @@ try:
         d3 = fitz.open(pdf)
         p3 = d3.load_page(0)
         getattr(ocr, "_decide_source", ocr.decide_source)(p3)
-        chk(not called, "B 안 보이는 층이 아니면 그림 점유율(그림 자리 1만 4천 개)을 재지 않는다", f"{len(called)}번")
+        chk(not called, "B 안 보이는 층이 아니면 그림 점유율(그림 자리 6만 9천 개)을 재지 않는다", f"{len(called)}번")
         d3.close()
         scan = str(tmp / "scan_layer.pdf")                 # 전면 그림 + 안 보이는 OCR 층(render mode 3) — 종전대로 ocr
         ds = fitz.open()
@@ -96,6 +96,26 @@ try:
         ocr._image_coverage = _orig_cov
     d1.close()
 
+    # ── G 텍스트 창 줄 뽑기(배경 워커가 GIL 을 쥔 채 쪽을 훑는 길) — 261114-11 덧붙임(사용자 결정 '더 줄이기') ──
+    from viewer import text_extract2 as tx
+    import pymupdf as _pm
+    seen = {"trace": 0, "draw": 0}
+    _ot, _od = _pm.Page.get_texttrace, _pm.Page.get_cdrawings
+    _pm.Page.get_texttrace = lambda self, *a, **k: (seen.__setitem__("trace", seen["trace"] + 1), _ot(self, *a, **k))[1]
+    _pm.Page.get_cdrawings = lambda self, *a, **k: (seen.__setitem__("draw", seen["draw"] + 1), _od(self, *a, **k))[1]
+    try:
+        dg = fitz.open(pdf)
+        rows = tx.page_lines(dg, pdf, 0, tables="off", join_lines=False)
+        chk(any("Accelerated" in (r.get("text") or "") for r in rows), "G 준비 — 텍스트 창 줄에 글이 있다", str(rows)[:120])
+        chk(seen["trace"] == 0, "G ★ 안 보이는 층 판정이 쪽을 돌려 보지 않는다(내용 흐름에 '3 Tr' 없음 — 종전: get_texttrace)", str(seen))
+        chk(seen["draw"] == 0, "G ★ 조각이 적은 쪽은 표 칸 차례용 선을 읽지 않는다(종전: get_drawings)", str(seen))
+        dg.close()
+        ds2 = fitz.open(scan)
+        chk(tx._is_ocr_layer(ds2.load_page(0)) is True, "G 안 보이는 OCR 층 쪽은 종전대로 OCR 층이다")
+        ds2.close()
+    finally:
+        _pm.Page.get_texttrace, _pm.Page.get_cdrawings = _ot, _od
+
     # ── C·D·E·F 실제 창 ──
     from viewer.app import MainWindow
     from viewer.widgets.main_view import MainView
@@ -109,6 +129,10 @@ try:
     MainView._load_page_words = lambda self: (words_calls.append(1), _orig_lw(self))[1]
     mw = MainWindow(); mw.resize(1300, 850); mw.show(); app.processEvents()
     spin(800)
+    try:                                                    # 텍스트 창을 보이게 — 그 워커(줄 뽑기)도 함께 돌 때의 멈춤을 잰다
+        mw.search_tabs.setCurrentWidget(mw.text_panel); spin(200)
+    except Exception:
+        pass
     inside = {"open": False, "text_inside": 0, "text_after": 0}
     _orig_now = mw._load_main_now
 
@@ -146,6 +170,9 @@ try:
         "D 텍스트 창은 여는 이벤트 안이 아니라 한 박자 뒤에", str(inside))
     chk(0 not in rendered, "E 표지 썸네일은 본문이 그린 것(쪽 0 을 다시 그리지 않음)", str(rendered[:6]))
     chk(worst[0] < 1000, "F 여는 동안 가장 긴 멈춤 < 1초", f"{worst[0]}ms")
+    # 261114-11 덧붙임(사용자 결정 '더 줄이기'): 픽스처 한 번 훑기(0.3초)는 TRB9.pdf(0.2~0.67초)보다 가볍다 — 그만큼 여유를 두고 0.8초.
+    #   첫 판(쪽 낱말 미룸·판정 기억까지)은 이 픽스처에서 0.90~0.96초, 텍스트 창 줄 뽑기·안 보이는 층 판정 거름 뒤 0.54~0.56초
+    chk(worst[0] < 800, "F ★ 여는 동안 가장 긴 멈춤 < 0.8초(텍스트 창 워커가 같이 돌 때 — 그 쪽을 훑는 GIL 을 줄였다)", f"{worst[0]}ms")
     print(f"  실측: 여는 동안 가장 긴 멈춤 {worst[0]}ms")
 except Exception:
     import traceback
