@@ -25,7 +25,8 @@ def chk(cond, msg, extra=""):
 prof = "port%d" % os.getpid()
 marker = Path(HERE) / "PolyPDF.portable"
 data = Path(HERE) / ("Data-" + prof)
-appdata = Path(os.environ["APPDATA"]) / "LocalTools" / ("PolyPDF-" + prof)
+from viewer.branding import APP_ID as _APP_ID          # 261114-23: 이사 판부터 PolyPinax-<프로필>
+appdata = Path(os.environ["APPDATA"]) / "LocalTools" / (_APP_ID + "-" + prof)
 env = dict(os.environ, POLYPDF_PROFILE=prof, QT_QPA_PLATFORM="offscreen")
 env.pop("POLYPDF_OPEN_GATHER_NAME", None)
 

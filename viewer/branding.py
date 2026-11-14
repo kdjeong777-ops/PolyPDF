@@ -12,7 +12,7 @@
 - PDF 모드 단위(ProgID `PolyPDF.pdf`·PDF 안 표식·'PolyPDF' 레이어)는 모드 이름 그대로가 맞는 이름이라 바꾸지 않는다.
 """
 
-MOVED = False                                  # ★ 이사 스위치 — 이사 판(beta.13 다음 판)에서 True
+MOVED = True                                   # ★ 이사 스위치 — 이사 판 1.1.0-beta.14 에서 켬(261114-23)
 
 PRODUCT = "PolyPinax"
 MODES = {"pdf": "PolyPDF", "photo": "PolyPix"}     # 모드 이름 — 새 모드(예: 영상)는 한 줄

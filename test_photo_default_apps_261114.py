@@ -97,6 +97,7 @@ class Frozen:
 
 
 from viewer import pdf_default as pdd
+from viewer import branding as _br                     # 261114-23: 안내의 실행 파일 이름은 이사 판부터 PolyPinax.exe
 fake = {"reg": FakeReg()}
 pdd.Reg = lambda: fake["reg"]                         # 실제 레지스트리를 만들지 못하게 — 먼저 바꿔 끼운다
 from PyQt6.QtGui import QDesktopServices
@@ -219,7 +220,7 @@ try:
     fake["reg"] = FakeReg(); opened.clear(); infos.clear()
     with Frozen(frozen=False):
         mw._register_default_apps(view_kind="mixed")
-    chk(not fake["reg"].writes and not opened and any("PolyPDF.exe" in t for t in infos), "F 개발 실행은 쓰지도 열지도 않고 안내만")
+    chk(not fake["reg"].writes and not opened and any(_br.EXE_NAME in t for t in infos), "F 개발 실행은 쓰지도 열지도 않고 안내만")
     mw.close()
 except Exception:
     import traceback

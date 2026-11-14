@@ -7,7 +7,7 @@
 이 저장소에는 이미 **GitHub Actions 워크플로**가 있어, **버전 태그를 push 하면
 자동으로 Windows 빌드 → zip → Release 업로드**까지 됩니다.
 - `.github/workflows/release.yml` : 태그 `v*` push 시 빌드 후 **두 자산 + 각 해시** 업로드 —
-  `PolyPDF-<tag>-win64.zip`(전체=첫 설치용)과 `PolyPDF-<tag>-win64-update.zip`(업데이트용, 무거운
+  `PolyPinax-<tag>-win64.zip`(전체=첫 설치용)과 `PolyPinax-<tag>-win64-update.zip`(업데이트용, 무거운
   불변부 제외), 그리고 **`<각 zip>.sha256`**. v2.26.0부터 **ffmpeg·Tesseract 재동봉**(다운로드+은밀실행을 Defender 가 차단하던 문제 회피).
 - **★ `.sha256` 자산은 보안 필수(260628)**: 앱이 이 파일로 ① 다운로드 직후, ② **압축 해제 직전(관리자 승격 인스턴스에서 다시)** 무결성을 검증한다. ②가 UAC 승인 대기 중 zip 바꿔치기(권한상승)를 막는 핵심이다. **해시 자산을 빠뜨리면 앱은 검증 없이 설치**하므로(구 릴리스 하위호환), 수동 릴리스에서도 반드시 함께 올릴 것 — `scripts/make_release_zip.ps1` 이 자동 생성하고 업로드 명령을 출력한다. 또한 자산 URL 이 **github.com 계열이 아니면 업데이트를 아예 하지 않는다**(안전한 실패).
 - `.github/workflows/ci.yml` : push/PR 마다 오프스크린 GUI 회귀 테스트.
@@ -31,7 +31,10 @@
   쓰지 않는다(앱 창이 글자 그대로 보인다). 태그 전에 `python scripts\release_notes.py --check release_notes\<태그>.md`.
 - **업데이트가 가벼운 이유**: `update` zip 은 안 바뀌는 무거운 부분(ffmpeg·Tesseract·한국어
   모델·NLTK)을 제외 → 덮어쓰기 시 기존 설치분이 **그대로 보존**되어 다시 받지 않음.
-- 저장소는 앱 기본값 `kdjeong777-ops/PolyPDF` 고정(설정 `update_repo` 로 변경 가능).
+- 저장소는 앱 기본값 `kdjeong777-ops/PolyPinax` 고정(설정 `update_repo` 로 변경 가능). 이름·자산 이름은 `viewer/branding.py` 한 곳에서 온다.
+- **이사 판(1.1.0-beta.14, 옛 이름 PolyPDF → PolyPinax)**: 깔린 옛 판은 옛 저장소 `kdjeong777-ops/PolyPDF` 만 보므로, 같은 태그를 옛 저장소에도 push 해
+  **다리 판**(옛 이름 자산 `PolyPDF-Setup-v…`·update zip 의 `PolyPDF.exe` 사본·노트 맨 위 이사 안내 — `release.yml` 의 `APP_BRIDGE`)을 낸 뒤 옛 저장소는 보관(archive)한다.
+  구성요소(`components` 릴리스·자연 음성)는 옛 저장소에 그대로 둔다(`branding.COMPONENTS_REPO`).
 - 자동 확인: 배포 exe 에서 시작 4초 뒤 1회(`auto_check_update`, 기본 켜짐).
 
 > 규약: 태그 = `v`+버전. 첫 설치 = full zip, 자동 업데이트 = update zip(이름에 `update`).
@@ -50,13 +53,13 @@ cd C:\My\PolyPDF\public
 #   git init; git add .; git commit -m "PolyPinax v2.23.0"
 
 gh auth login
-gh repo create PolyPDF --public --source . --remote origin --push
+gh repo create PolyPinax --public --source . --remote origin --push
 #   (gh 없으면: GitHub 웹에서 빈 repo 생성 후
-#    git remote add origin https://github.com/<OWNER>/PolyPDF.git
+#    git remote add origin https://github.com/<OWNER>/PolyPinax.git
 #    git branch -M main; git push -u origin main)
 ```
 
-앱에서 **도움말 → 업데이트 확인…** → `OWNER/PolyPDF` 1회 입력.
+앱에서 **도움말 → 업데이트 확인…** → `OWNER/PolyPinax` 1회 입력.
 
 ---
 
@@ -76,7 +79,7 @@ git add -A; git commit -m "v2.26.0"; git tag v2.26.0; git push; git push origin 
 ```
 
 GitHub Actions(release.yml)가 Windows 에서 빌드하고
-`PolyPDF-v2.25.0-win64.zip` 을 릴리스에 올립니다. 기존 사용자 앱이 자동 감지·업데이트.
+`PolyPinax-v2.25.0-win64.zip` 을 릴리스에 올립니다. 기존 사용자 앱이 자동 감지·업데이트.
 
 > **오래된 릴리스 자동 정리**: 릴리스를 만든 직후 `scripts/prune_releases.ps1` 이 **버전 릴리스를 최근 10개만** 남기고
 > 나머지를 지웁니다. **git 태그는 남기므로** 옛 버전 소스는 저장소 Tags 의 Source code 로 받을 수 있습니다.
@@ -88,7 +91,7 @@ CI를 쓰지 않거나 빠르게 올릴 때:
 .\build_ci.bat
 powershell -ExecutionPolicy Bypass -File scripts\make_release_zip.ps1   # full + update zip 2종 생성
 python scripts\release_notes.py v2.26.0 notes.md                         # 릴리스 설명(초안 release_notes\v2.26.0.md, 없으면 커밋 메시지로)
-gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update.zip PolyPDF-v2.26.0-win64.zip.sha256 PolyPDF-v2.26.0-win64-update.zip.sha256 --title "PolyPinax v2.26.0" --notes-file notes.md
+gh release create v2.26.0 PolyPinax-v2.26.0-win64.zip PolyPinax-v2.26.0-win64-update.zip PolyPinax-v2.26.0-win64.zip.sha256 PolyPinax-v2.26.0-win64-update.zip.sha256 --title "PolyPinax v2.26.0" --notes-file notes.md
 #   (gh 없으면 GitHub 웹 Releases → Draft new release → 태그 v2.26.0 → 두 zip 업로드)
 ```
 
@@ -121,7 +124,7 @@ gh release create v2.26.0 PolyPDF-v2.26.0-win64.zip PolyPDF-v2.26.0-win64-update
 
 | 설치된 버전 | 증상 | 조치 |
 | --- | --- | --- |
-| **0.43 이하** | 업데이트 첫 화면에서 `'setuptools' 경로에 대한 액세스가 거부되었습니다` 후 중단 | **이번 한 번만** 최신 `PolyPDF-Setup-*.exe` 를 받아 **우클릭 → '관리자 권한으로 실행'**. 이후 자동 업데이트 정상 |
+| **0.43 이하** | 업데이트 첫 화면에서 `'setuptools' 경로에 대한 액세스가 거부되었습니다` 후 중단 | **이번 한 번만** 최신 `PolyPinax-Setup-*.exe` 를 받아 **우클릭 → '관리자 권한으로 실행'**. 이후 자동 업데이트 정상 |
 | beta.109 이후 | 권한이 부족한 폴더를 만나면 UAC(관리자 승인) 창이 뜸 | 승인하면 계속 진행. 거부하면 실패로 정직하게 안내 |
 
 원인: 옛 설치본은 설치 폴더 루트는 쓸 수 있어도 `_internal` 아래 일부 폴더가 관리자 소유일 수 있다.
@@ -201,17 +204,17 @@ zip(압축 풀어 실행) 외에 **정식 설치 프로그램**도 함께 배포
 
 - 정의: [`installer/PolyPDF.iss`](installer/PolyPDF.iss) (Inno Setup 6), 안내문 [`installer/guide_ko.txt`](installer/guide_ko.txt).
 - **CI 자동 빌드**: 태그 push 시 `release.yml` 이 Inno Setup(choco)을 설치해 컴파일 →
-  **`PolyPDF-Setup-v<ver>.exe`** 를 zip 2종과 함께 릴리스 자산으로 업로드(설치본 실패해도 zip 릴리스는 계속).
+  **`PolyPinax-Setup-v<ver>.exe`**(이사 판 전 `PolyPDF-Setup-v…`) 를 zip 2종과 함께 릴리스 자산으로 업로드(설치본 실패해도 zip 릴리스는 계속).
 - **로컬 빌드**(선택): `build_ci.bat` 빌드 후
   `powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1` (Inno Setup 6 필요:
   `winget install -e --id JRSoftware.InnoSetup`).
 
 설치본이 하는 일:
-- `C:\Program Files\PolyPDF` 에 설치(관리자 권한), 시작 메뉴·(선택)바탕화면 바로가기.
+- `C:\Program Files\PolyPinax` 에 설치(관리자 권한 — 옛 `Program Files\PolyPDF` 판은 먼저 제거), 시작 메뉴·(선택)바탕화면 바로가기.
 - **PDF 기본 앱 연결**(체크박스, 기본 꺼짐): PolyPinax 를 `.pdf` 연결 후보로 **등록**(ProgID·RegisteredApplications)
   하고, 설치 후 **Windows '기본 앱' 설정창**을 열어 사용자가 `.pdf → PolyPinax` 를 직접 선택하게 함.
   > Windows 10/11 은 보안상 설치 프로그램이 기본 앱을 **자동 강제 지정할 수 없음** → 등록+안내가 정상 방식.
-  > (앱은 `PolyPDF.exe "<file.pdf>"` 인자를 처리하므로 연결 시 더블클릭으로 열림.)
+  > (앱은 `PolyPinax.exe "<file.pdf>"` 인자를 처리하므로 연결 시 더블클릭으로 열림.)
 - **API 키 안내**: 설치 마지막에 `guide_ko.txt`(무료 오픈API 4종 — 표준국어대사전·우리말샘·온용어·법제처 OC —
   발급 주소와 `설정 → 인터넷 사전` 입력 위치) 표시, `{app}\사용안내(API키).txt` 로도 동봉.
 
@@ -219,7 +222,7 @@ zip(압축 풀어 실행) 외에 **정식 설치 프로그램**도 함께 배포
 > 업데이트 도우미가 설치 폴더(Program Files)에 **쓰기 불가면 UAC로 자체 승격**해 적용하고, 실패 시
 > **'완료' 대신 정직한 오류**를 띄운다(이전엔 권한 부족으로 못 고치고도 '설치 완료'만 띄워 옛 버전이 유지되던 버그).
 > ⚠️ **beta.8 이전(예: 0.42.0) Program Files 설치 사용자는 깨진 업데이터를 자동으로 못 고친다 →
-> 최신 `PolyPDF-Setup-*.exe` 를 '관리자 권한으로 실행'해 1회 재설치**해야 한다(이후 자동 업데이트 정상).
+> 최신 `PolyPinax-Setup-*.exe` 를 '관리자 권한으로 실행'해 1회 재설치**해야 한다(이후 자동 업데이트 정상).
 > (zip 설치본은 권한 제약 없음.)
 
 ---

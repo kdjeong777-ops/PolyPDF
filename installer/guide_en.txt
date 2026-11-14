@@ -25,4 +25,4 @@ If you need sound in recordings, check your audio devices first with
 Tools → Settings → 'Test Recording'.
 
 ----------------------------------------------------
-Questions / change history :  https://github.com/kdjeong777-ops/PolyPDF
+Questions / change history :  https://github.com/kdjeong777-ops/PolyPinax

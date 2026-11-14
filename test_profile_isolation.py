@@ -25,7 +25,8 @@ def chk(cond, msg, extra=""):
 from pathlib import Path
 prof = "ptest%d" % os.getpid()
 base = Path(os.environ["APPDATA"]) / "LocalTools"
-pdir, real = base / ("PolyPDF-" + prof), base / "PolyPDF"
+from viewer.branding import APP_ID as _APP_ID          # 261114-23: 이사 판부터 PolyPinax
+pdir, real = base / (_APP_ID + "-" + prof), base / _APP_ID
 before = set(os.listdir(real / "instances")) if (real / "instances").exists() else set()
 env = dict(os.environ, POLYPDF_PROFILE=prof, QT_QPA_PLATFORM="offscreen")
 env.pop("POLYPDF_OPEN_GATHER_NAME", None)

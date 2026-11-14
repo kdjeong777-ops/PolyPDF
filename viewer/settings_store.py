@@ -90,6 +90,7 @@ def _strip_secrets(data: dict) -> dict:
 
 
 _DIR_OVERRIDE = None     # 261009-19: 색인 자식 프로세스(Qt 앱 이름이 없다)가 부모의 설정 폴더를 그대로 쓰게
+_LOCAL_DIR_OVERRIDE = None   # 261114-23: 개발 실행이 옛 이름 도구 자료 폴더(%LOCALAPPDATA%\PolyPDF)를 함께 쓸 때
 PORTABLE = False         # 261009-22(마스터 §14.9): 휴대용(무설치) 모드 — exe 옆 `PolyPDF.portable` 이 있으면 main.py 가 켠다
 from viewer.branding import PORTABLE_MARKER, OLD_PORTABLE_MARKERS, APP_ID as _APP_ID   # 261114-8: 이사 판부터 PolyPinax.portable(옛 표식도 안다)
 
@@ -120,6 +121,8 @@ def local_data_dir() -> Path:
     """이 PC 에만 두는 도구 자료(사용자 tessdata·ant 등) 폴더 — 휴대용이면 데이터 폴더 안, 아니면 %LOCALAPPDATA%\\PolyPDF."""
     if PORTABLE:
         return settings_dir()
+    if _LOCAL_DIR_OVERRIDE is not None:
+        return Path(_LOCAL_DIR_OVERRIDE)      # 261114-23: 개발 실행이 옛 이름 폴더를 함께 쓸 때(main.dev_profile_dirs)
     import os
     return Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / _APP_ID     # 261114-8: 이사 판부터 PolyPinax(main 이 옮긴다)
 

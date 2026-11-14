@@ -13,6 +13,7 @@ G. 옛 HKCU 등록(ProgID 명령)이 없는 실행 파일을 가리키면 지금
 H. 설치 언어 레지스트리 — 새 키 → 옛 키 순서로 읽는다
 I. 설치 프로그램 — `/DMOVED` 하나로 이름이 갈린다(#ifdef), 옛 실행 파일도 닫는다, 이사 때 설치 폴더를 이어 쓰지 않는다
 J. 빌드·릴리스 — exe·dist 이름을 branding 에서 읽는다(build_ci.bat·build_exe.py·release.yml), 이사 판은 옛 자산 이름 사본도 올린다(다리 판)
+N. (261114-23) 개발 실행(.venv main.py)은 스위치가 켜져도 실제 설정 폴더를 옮기지 않고, 새 폴더에 설정이 없으면 옛 폴더를 함께 쓴다
 """
 import os, re, sys, tempfile, shutil, importlib
 from pathlib import Path
@@ -20,6 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 os.environ.pop("POLYPDF_PROFILE", None)
+os.environ["QT_QPA_PLATFORM"] = "offscreen"             # 검사 작성 SOT §14.7 — N 이 QStandardPaths 를 쓴다
 
 fails = []
 
@@ -86,6 +88,44 @@ try:
                 sys.frozen = _frozen
         chk(not calls, "K 스위치 꺼짐 — 설정 폴더 이사·레지스트리 복사·ProgID 고치기가 한 번도 돌지 않는다", str(calls))
     main._branding.MOVED = _was
+    # ── N ── (261114-23) 개발 실행(빌드본 아님)은 스위치가 켜져도 옮기지 않는다 — 깔린 옛 판이 같은 실제 설정 폴더를 쓰고 있다
+    dpd = getattr(main, "dev_profile_dirs", None)
+    chk(callable(dpd), "N main.dev_profile_dirs 가 있다")
+    if callable(dpd) and _orig:
+        from PyQt6.QtCore import QStandardPaths
+        QStandardPaths.setTestModeEnabled(True)            # 실제 설정 폴더를 보지 않게(검사 작성 SOT §14.7.2)
+        import viewer.settings_store as _ss
+        calls = []
+        main._branding.MOVED = True
+        main.move_profile = lambda *a, **k: calls.append(("move", a)) or "moved"
+        main.copy_reg_tree = lambda *a, **k: calls.append(("reg", a)) or 0
+        _fz = getattr(sys, "frozen", None)
+        if _fz is not None:
+            del sys.frozen
+        _ov = (_ss._DIR_OVERRIDE, getattr(_ss, "_LOCAL_DIR_OVERRIDE", None))
+        try:
+            main._move_to_new_name()
+        finally:
+            main.move_profile, main.copy_reg_tree = _orig
+            main._branding.MOVED = _was
+            if _fz is not None:
+                sys.frozen = _fz
+            _ss._DIR_OVERRIDE, _ss._LOCAL_DIR_OVERRIDE = _ov
+        chk(not calls, "N 개발 실행 + 스위치 켜짐 — 설정 폴더 이름 바꾸기·레지스트리 복사를 하지 않는다", str(calls))
+        o, n_, ol, nl = tmp / "dv" / "PolyPDF", tmp / "dv" / "PolyPinax", tmp / "dl" / "PolyPDF", tmp / "dl" / "PolyPinax"
+        o.mkdir(parents=True); ol.mkdir(parents=True)
+        (o / "settings.json").write_text("{}", encoding="utf-8")
+        r = dpd(o, n_, ol, nl)
+        chk(r == {"settings": str(o), "local": str(ol)} and o.is_dir() and not n_.exists(),
+            "N 새 폴더에 설정이 없으면 옛 폴더를 그대로 함께 쓴다(옮기지 않음)", str(r))
+        n_.mkdir(parents=True); (n_ / "settings.json").write_text("{}", encoding="utf-8"); nl.mkdir(parents=True)
+        r = dpd(o, n_, ol, nl)
+        chk(r == {"settings": None, "local": None}, "N 이사 판 설치본이 옮긴 뒤(새 폴더에 설정)는 새 폴더", str(r))
+        _ss._LOCAL_DIR_OVERRIDE = str(ol)
+        try:
+            chk(_ss.local_data_dir() == ol, "N 도구 자료 폴더도 옛 폴더를 따른다(settings_store._LOCAL_DIR_OVERRIDE)")
+        finally:
+            _ss._LOCAL_DIR_OVERRIDE = None
     # ── L ── 정보 창 소스코드 주소·구성요소 저장소
     ab = importlib.import_module("viewer.about")
     chk(ab.SOURCE_URL == "https://github.com/" + b.UPDATE_REPO, "L 정보 창 소스코드 주소 = 지금 저장소(이사 판부터 새 저장소)", ab.SOURCE_URL)

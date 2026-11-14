@@ -3,7 +3,8 @@
 **폴더째 펼쳐 보는 PDF·사진 뷰어** — *A PDF & photo viewer that opens whole folders.*
 
 > **PolyPDF 가 PolyPinax 로 이름을 바꿨습니다.** 설정·검색 색인·기본 앱·작업 표시줄 고정·가상 프린터는 그대로 이어지고,
-> 설치 폴더·실행 파일(`PolyPDF.exe`)·이 저장소 주소도 그대로입니다. 그리스어 *pinax* 는 '그림을 그린 판' 이자 '목록'
+> 1.1.0-beta.14 부터 설치 폴더·실행 파일(`PolyPinax.exe`)·설정 폴더·저장소 주소(이 저장소, 옛 `kdjeong777-ops/PolyPDF` 는 보관)도 새 이름입니다 —
+> 깔린 옛 판은 앱 안 업데이트 한 번으로 저절로 넘어옵니다. 그리스어 *pinax* 는 '그림을 그린 판' 이자 '목록'
 > (알렉산드리아 도서관의 첫 장서 목록 *Pinakes*)이라, 여러(*poly*) 판을 엮은 목록처럼 폴더 속 PDF·사진을 한곳에서 찾고 보고 고칩니다.
 
 한글 PDF 뷰어·편집·발표 도구 (PyQt6 + PyMuPDF). 책갈피 탐색, 다중 검색(FTS5),
@@ -18,7 +19,7 @@
 pip install -r requirements.txt
 python scripts/i18n.py compile   # 언어팩 .po → .mo (Babel 필요: pip install babel==2.18.0). 한국어만 쓰면 생략 가능
 python main.py            # 개발 실행 (또는 .\run.bat)
-.\build_ci.bat            # PyInstaller onedir 빌드 → dist\PolyPDF\PolyPDF.exe
+.\build_ci.bat            # PyInstaller onedir 빌드 → dist\PolyPinax\PolyPinax.exe
 ```
 
 ### 선택 런타임(전체 기능)
@@ -39,12 +40,12 @@ python main.py            # 개발 실행 (또는 .\run.bat)
 ## 설정 저장 위치 (업데이트해도 유지)
 사용자 설정은 **프로그램 폴더가 아니라 사용자 프로필**에 저장되어, 프로그램을 교체(업데이트)해도
 유지됩니다.
-- `%APPDATA%\LocalTools\PolyPDF\settings.json` — 즐겨찾기·글쓰기 스타일·펜·환경설정 등
+- `%APPDATA%\LocalTools\PolyPinax\settings.json` — 즐겨찾기·글쓰기 스타일·펜·환경설정 등 (옛 판의 `LocalTools\PolyPDF` 는 첫 실행 때 이 이름으로 옮겨짐)
 - 같은 폴더의 `index.db`(검색 인덱스)·스크린샷 / 창 레이아웃은 레지스트리
 
 ## 무설치(휴대용) 판
-릴리스의 `PolyPDF-<버전>-win64-portable.zip` 을 쓰기 가능한 폴더(USB 등)에 풀고 `PolyPDF\PolyPDF.exe` 를 실행합니다.
-- `PolyPDF.exe` 옆의 `PolyPDF.portable` 표식이 있으면 설정·색인·사전·스크린샷·창 레이아웃을 **그 폴더의 `Data\`** 에 둡니다
+릴리스의 `PolyPinax-<버전>-win64-portable.zip` 을 쓰기 가능한 폴더(USB 등)에 풀고 `PolyPinax\PolyPinax.exe` 를 실행합니다.
+- `PolyPinax.exe` 옆의 `PolyPinax.portable` 표식(옛 판의 `PolyPDF.portable` 도 알아봄)이 있으면 설정·색인·사전·스크린샷·창 레이아웃을 **그 폴더의 `Data\`** 에 둡니다
   (레지스트리·`%APPDATA%` 를 쓰지 않음). 표식을 지우면 위의 사용자 폴더를 씁니다.
 - `Program Files` 처럼 쓸 수 없는 폴더에 풀면 휴대용을 쓰지 못하고 사용자 폴더로 물러섭니다(상태줄에 안내).
 - 앱 안 업데이트가 그대로 됩니다 — `_internal\` 만 바꾸므로 `Data\` 는 남습니다.
@@ -77,7 +78,7 @@ python main.py            # 개발 실행 (또는 .\run.bat)
 ```powershell
 git init; git add .; git commit -m "PolyPinax 1.88.0"
 git branch -M main
-gh repo create PolyPDF --private --source . --remote origin --push   # gh CLI (또는 웹에서 repo 생성 후 remote add)
+gh repo create PolyPinax --private --source . --remote origin --push   # gh CLI (또는 웹에서 repo 생성 후 remote add)
 ```
 
 ### 자동화 (.github/workflows)
@@ -96,7 +97,7 @@ git push origin v1.88.0        # → release.yml 이 빌드·업로드
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1 -Tag v1.88.0 -Build
 ```
-`build_ci.bat` 로 빌드 → `dist\PolyPDF` 를 zip → `gh release create` 로 업로드합니다.
+`build_ci.bat` 로 빌드 → `dist\PolyPinax` 를 zip → `gh release create` 로 업로드합니다.
 
 ### 평소 업데이트 관리
 ```powershell

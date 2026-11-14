@@ -224,6 +224,14 @@ def copy_reg_tree(src: str, dst: str) -> int:
     return n
 
 
+def dev_profile_dirs(old_set: Path, new_set: Path, old_local: Path, new_local: Path) -> dict:
+    """261114-23: 개발 실행이 쓸 폴더 — 아무것도 옮기지 않는다. 새 이름 폴더에 설정이 없고 옛 폴더가 있으면 옛 폴더(문자열), 아니면 None.
+    도구 자료 폴더(%LOCALAPPDATA%)도 같은 규칙(새 폴더가 없을 때만 옛 폴더)."""
+    s = str(old_set) if (Path(old_set).is_dir() and not (Path(new_set) / "settings.json").exists()) else None
+    l = str(old_local) if (Path(old_local).is_dir() and not Path(new_local).is_dir()) else None
+    return {"settings": s, "local": l}
+
+
 def _move_to_new_name() -> None:
     """261114-8(이사 판, `branding.MOVED`): 옛 이름(PolyPDF)의 설정 폴더·도구 자료 폴더·창 위치(QSettings)를 새 이름으로 한 번 옮긴다.
     스위치가 꺼져 있거나 시험 프로필·휴대용이면 하지 않는다. 옮기지 못한 설정 폴더는 그 실행에서 옛 폴더를 쓴다(`_DIR_OVERRIDE`)."""
@@ -236,9 +244,18 @@ def _move_to_new_name() -> None:
         from PyQt6.QtCore import QStandardPaths
         new_dir = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation))
         old_dir = new_dir.parent / _branding.OLD_ID
+        la = Path(os.environ.get("LOCALAPPDATA") or str(Path.home()))
+        if not getattr(sys, "frozen", False):
+            # 261114-23: 개발 실행(.venv main.py)은 옮기지 않는다 — 깔린 옛 판(PolyPDF)이 같은 폴더를 쓰고 있어, 개발 실행이 옮기면
+            #   옛 판이 빈 설정·빈 색인으로 뜬다. 새 폴더에 설정이 없으면 옛 폴더를 그대로 함께 쓴다(옮기기는 이사 판 설치본이 한다).
+            plan = dev_profile_dirs(old_dir, new_dir, la / _branding.OLD_ID, la / _branding.APP_ID)
+            if plan["settings"]:
+                _ss._DIR_OVERRIDE = plan["settings"]
+            if plan["local"]:
+                _ss._LOCAL_DIR_OVERRIDE = plan["local"]
+            return
         if move_profile(old_dir, new_dir) == "fail":
             _ss._DIR_OVERRIDE = str(old_dir)     # 이번 실행은 옛 폴더로 — 다음 실행에서 다시 옮겨 본다
-        la = Path(os.environ.get("LOCALAPPDATA") or str(Path.home()))
         move_profile(la / _branding.OLD_ID, la / _branding.APP_ID)
         copy_reg_tree(r"Software\LocalTools\%s" % _branding.OLD_ID, r"Software\LocalTools\%s" % _branding.APP_ID)
     except Exception:
