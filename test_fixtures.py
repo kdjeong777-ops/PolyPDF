@@ -15,6 +15,7 @@
   scanned_pdf()  스캔 모사 — 페이지가 **이미지 뿐**이라 텍스트 레이어가 없음, 14쪽
                  (`_pdf_is_scanned` → True. 앞 12쪽 표본의 60% 이상이 'ocr' 로 판정되면 참)
   image_strips_pdf() 그림 전용 — 가상 프린터·사진→PDF 꼴, 쪽마다 2048px Flate 그림 띠(261107-19, 응답성 SOT §7.5)
+  tiled_bg_pdf()   발표 슬라이드 꼴 — 첫 쪽 질감 배경을 4×4pt 그림 1만 4천 번으로 깔아 쪽 훑기가 비싸다(261114-11, 응답성 SOT §6)
   paragraph_pdf()  양쪽 맞춤 한글 문단으로 꽉 찬 3쪽 + 제목·목록 줄, 설치 안 된 CJK 글꼴(261113-3, 형식 변환 쪽 맞춤·줄 잇기)
   ruled_table_pdf()  괘선이 **선으로 그려진** 3열 표 — pdfplumber 가 표로 인식한다
                  (텍스트 창 SOT §3.3 — 칸을 놓쳐도 글을 잃지 않는지)
@@ -142,6 +143,43 @@ def image_strips_pdf() -> str:
     p = d / "sample_image_strips.pdf"
     if not p.exists() or p.stat().st_size == 0:
         _build_image_strips_pdf(p)
+    return str(p)
+
+
+_TILE_N = 14000
+
+
+def _build_tiled_bg_pdf(dst: Path) -> None:
+    """261114-11(응답성 SOT §6 표·단어학습 SOT §14.18): 발표 슬라이드 꼴 — 첫 쪽 질감 배경을 **4×4pt 그림 하나를 1만 4천 번** 깔고
+    그 위에 보이는 영문 글(가로 쪽). 실제 TRB9.pdf 는 23,296번 — 쪽 내용을 한 번 훑는 데 0.25~1초라 메인에서 여러 번 훑으면 선다. 2~5쪽은 보통 글."""
+    import fitz
+    doc = fitz.open()
+    W, H = 842.0, 595.0
+    p = doc.new_page(width=W, height=H)
+    tile = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 8, 8), False)
+    tile.set_rect(tile.irect, (90, 90, 90))
+    p.insert_image(fitz.Rect(0, 0, 4, 4), pixmap=tile)     # 그림 하나(자원 이름을 얻는다)
+    name = p.get_images(full=True)[0][7]
+    cols = int(W // 4)
+    ops = [b"q 4 0 0 4 %d %d cm /%s Do Q" % ((k % cols) * 4, int(H) - 4 - (k // cols) * 4, name.encode())
+           for k in range(_TILE_N)]                          # insert_image 1만 4천 번은 몇 분 — 내용 흐름을 한 번에 쓴다
+    cx = p.get_contents()[0]
+    doc.update_stream(cx, b"\n".join(ops) + b"\n")
+    p.insert_text((60, 300), "Accelerated Pavement Testing and Modelling in South Africa", fontsize=22)
+    p.insert_text((60, 340), "Materials and pavement specialist workshop presentation", fontsize=16)
+    for i in range(4):
+        q = doc.new_page(width=W, height=H)
+        q.insert_text((60, 120), f"Slide {i + 2} pavement testing results and analysis", fontsize=18)
+    doc.save(str(dst), deflate=True)
+    doc.close()
+
+
+def tiled_bg_pdf() -> str:
+    """첫 쪽 배경을 작은 그림 1만 4천 개로 깐 발표 PDF(5쪽, 가로) 경로 — 쪽 훑기가 비싼 쪽(261114-11)."""
+    d = _ensure_dir()
+    p = d / "sample_tiled_bg.pdf"
+    if not p.exists() or p.stat().st_size == 0:
+        _build_tiled_bg_pdf(p)
     return str(p)
 
 

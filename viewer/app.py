@@ -1163,11 +1163,10 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             tp = getattr(self, "text_panel", None)
             if tp is not None and self.search_tabs.currentWidget() is tp:
                 tp.set_busy(tr('p.{page} 읽는 중…').format(page=page + 1))
-            self._lite_follow.start()
+            self._lite_follow.start(self.LITE_FOLLOW_MS)
         else:
-            self._lite_follow.stop()
-            self._on_main_page_changed(page)
-            self._on_study_page_changed(page)
+            # 261114-11(응답성 SOT §4.7 ③): 한 박자 뒤 — 쪽 그리기와 텍스트 창 글자층 판정이 한 이벤트에 이어 붙지 않게
+            self._lite_follow.start(self.TEXT_FOLLOW_MS)
         self._mv[i].clear_word_highlights()
         self._sync_bookmark_to_active()
         self._refresh_page_hyperlinks(i)          # 260609-3: 페이지 링크 버튼 갱신
@@ -8224,7 +8223,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             else:
                 self._quick_end()
             if path.suffix.lower() == ".pdf":
-                self.main_view.set_quick_open(quick)     # 끝(`finally`)에서 끈다 — 숨김·회전 다시 그리기(`_refresh_hidden_ui`)도 낱말을 읽지 않게
                 ok = self.main_view.load_document(
                     path, page_index=item.page_index or 0, query=item.query
                 )
@@ -8241,8 +8239,8 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 elif self.page_thumbs.is_render_held():
                     self.page_thumbs.release_render(False)
                 self.page_thumbs.load_document(path)
-                if quick:
-                    self.page_thumbs.seed_page(self.main_view.current_page(), self.main_view.current_page_pixmap())
+                # 261114-5·-11: 본문이 막 그린 쪽은 썸네일이 다시 그리지 않는다(작은 그림 수만 개로 깐 쪽은 한 번 그리기 0.9초 — TRB9.pdf)
+                self.page_thumbs.seed_page(self.main_view.current_page(), self.main_view.current_page_pixmap())
                 self._hist_pages_baseline()            # 261012-10(§4.6.8): 쪽 편집 되돌리기 기준
                 # 260902-6(사용자 보고): 이전 파일로 넘어가면 본문은 마지막 쪽인데 썸네일은
                 #   맨 위(row -1)에 머물렀다 — load_document 의 pageChanged 가 썸네일 재로드
@@ -8308,10 +8306,6 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             #   폴더 변경은 '폴더/파일 열기'(open_folder/open_pdf)에서만 일어남.
             self._sync_right_pane_bookmark()
         finally:
-            try:
-                self.main_view.set_quick_open(False)     # 261114-5
-            except Exception:
-                pass
             QApplication.restoreOverrideCursor()
 
     def _on_bookmark_activated(self, file_path: str, page_index: int):
@@ -8329,7 +8323,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
 
     # ===== 261114-5(응답성 SOT §4.7 ⑤, 사용자 지시·결정): 책갈피창 파일 옮김 — 표지 먼저, 나머지는 멈춘 뒤 =====
     QUICK_THUMBS_MS = 150     # 옮김이 이만큼 멈추면 보이는 썸네일
-    QUICK_REST_MS = 450       # 이만큼 멈추면 나머지(한 화면 아래 썸네일·쪽 낱말·문서 정보 줄·서명 확인)
+    QUICK_REST_MS = 450       # 이만큼 멈추면 나머지(한 화면 아래 썸네일·문서 정보 줄·서명 확인)
 
     def _quick_wanted(self, tree, file_path) -> bool:
         """책갈피창이 '표지 먼저' 로 내보낸 옮김인가 — 이미 그 창에 열린 파일이면 종전대로(다시 여는 일은 같다)."""
@@ -8388,11 +8382,7 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
                 return                                    # 그 사이 다른 것을 열었다 — 그 열기가 제 일을 했다
         except Exception:
             return
-        try:
-            mv.ensure_page_words()
-        except Exception:
-            pass
-        self._doc_info_refresh(pane)
+        self._doc_info_refresh(pane)                      # 쪽 낱말은 쓸 때 읽는다(261114-11, MainView._render_current)
         if pane == self._active_pane:
             try:
                 self._sign_on_doc_loaded()

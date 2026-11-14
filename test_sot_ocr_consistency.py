@@ -177,7 +177,9 @@ chk("안 보이는 층" in row1 or "_is_ocr_layer" in row1,
     "⑦ 1번 규칙에 '안 보이는 층' 조건이 적혀 있다", row1[:90])
 chk("_overlaid_ocr_layer" in OCR_PY and "_is_ocr_layer" in OCR_PY,
     "⑦ 코드도 그 조건을 쓴다")
-chk(re.search(r"cov >= 0\.6 and _overlaid_ocr_layer\(page\)", OCR_PY) is not None,
+chk(re.search(r"cov >= 0\.6 and _overlaid_ocr_layer\(page\)", OCR_PY) is not None
+    # 261114-11(§14.18 '싼 것부터'): 안 보이는 층을 먼저 보고 그 안에서 점유율 — 두 조건 모두는 그대로
+    or re.search(r"_overlaid_ocr_layer\(page\):\s*\n\s*cov = _image_coverage\(page\)\s*\n\s*if cov >= 0\.6:", OCR_PY) is not None,
     "⑦ 두 조건을 **모두** 본다")
 chk("§14.18.1" in b14, "⑦ 그 까닭(§14.18.1)이 문서에 있다")
 

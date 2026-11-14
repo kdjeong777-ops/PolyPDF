@@ -1838,8 +1838,7 @@ class MainView(QWidget):
         self._search_mode = None   # 261014-18(검색창 SOT §4.1): (대소문자, 정규식) 또는 None — `set_search_mode`
         self._marks = {}           # 261014-23(마스터 §4.11): {파일 키: {쪽: [(사각형 pt, (r,g,b,a))]}} — 문서 비교 칠하기
         self._matches: list = []
-        self._page_words: list = []     # 260617-3: 현재 페이지 단어 박스(PDF 좌표)
-        self._quick_open = False        # 261114-5(응답성 SOT §4.7 ⑤): 표지 먼저 — 그리는 동안 쪽 낱말은 읽지 않는다(쓰는 곳이 빈 목록이면 그때 읽는다)
+        self._page_words: list = []     # 260617-3: 현재 페이지 단어 박스(PDF 좌표) — 쓸 때 읽는다(261114-11)
         self._sel_items: list = []      # 선택 하이라이트 QGraphicsRectItem
         self._sel_text = ""             # 선택된 텍스트
         self._copy_allowed = True        # 260618-1: 문서 복사 권한(없으면 복사 차단)
@@ -2477,10 +2476,6 @@ class MainView(QWidget):
         return n
 
     # ----- 260617-3: 단어 단위 텍스트 선택(드래그 하이라이트) -----
-    def set_quick_open(self, on: bool) -> None:
-        """261114-5(응답성 SOT §4.7 ⑤): 앱이 '표지 먼저' 로 열 때 `load_document` 앞뒤로 켜고 끈다."""
-        self._quick_open = bool(on)
-
     def current_page_pixmap(self):
         """막 그린 지금 쪽 픽스맵(한 장 보기·PDF 일 때만, 아니면 None) — 썸네일이 표지를 다시 그리지 않게(261114-5)."""
         try:
@@ -2490,11 +2485,6 @@ class MainView(QWidget):
             return self._page_item.pixmap()
         except Exception:
             return None
-
-    def ensure_page_words(self) -> None:
-        """표지 먼저로 건너뛴 쪽 낱말을 지금 읽는다(옮김이 멈춘 뒤 앱의 뒤처리)."""
-        if self._doc is not None and not self._page_words and not self._is_image:
-            self._load_page_words()
 
     def _load_page_words(self):
         """현재 페이지의 단어 박스를 **표시 좌표**(내장 /Rotate 보정)로 적재. 읽기순.
@@ -3571,10 +3561,9 @@ class MainView(QWidget):
         self._sel_items = []
         self._sel_text = ""
         self._sel_start = None
-        if self._quick_open:
-            self._page_words = []        # 261114-5(§4.7 ⑤): 표지 먼저 — 고를 때(`_sel_begin`)·뒤처리에서 읽는다
-        else:
-            self._load_page_words()
+        # 261114-11(응답성 SOT §4.4): 쪽 낱말은 **쓸 때** 읽는다(`_sel_begin`·문장 찾기가 빈 목록이면 읽는다) — 그릴 때마다 읽으면
+        #   글 분석(`_view_src` — 글자층 판정·줄 묶기, 쪽 내용을 서너 번 훑는다)이 메인에서 돈다. 작은 그림 수만 개로 깐 쪽(TRB9.pdf)은 4.7초
+        self._page_words = []
         # 단어학습 하이라이트 재적용(있으면) — 재렌더 후에도 유지
         # scene.clear() 가 이미 그래픽 아이템을 제거했으므로 리스트를 비우고 다시 그림(스테일 누적 방지)
         if getattr(self, "_word_hl_groups", None):

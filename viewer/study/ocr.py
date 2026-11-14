@@ -212,13 +212,19 @@ def _image_coverage(page: "fitz.Page") -> float:
     텍스트 창이 쪽마다 메인 스레드에서 부르는 길이라 스캔·큰 그림 쪽에서 1.9~2.8초 섰다(설치본 실측).
     위치만 필요하므로 해시 없는 `get_image_info(hashes=False)` 의 bbox 를 쓴다(표본 4종 11쪽에서 값 동일, 100배 이상 빠름)."""
     try:
-        import fitz
-        total = float(page.rect.width * page.rect.height) or 1.0
+        pr = page.rect
+        px0, py0, px1, py1 = float(pr.x0), float(pr.y0), float(pr.x1), float(pr.y1)
+        total = float((px1 - px0) * (py1 - py0)) or 1.0
         area = 0.0
+        # 261114-11(§14.18): `fitz.Rect` 를 만들지 않고 숫자로 — 질감 배경을 작은 그림 23,296개로 깐 쪽에서 `Rect` 만 2.4초(TRB9.pdf)
         for info in page.get_image_info(hashes=False, xrefs=False):
-            r = fitz.Rect(info["bbox"]) & page.rect
-            if not r.is_empty:
-                area += abs(r.width * r.height)
+            a, b, c, d = info["bbox"]
+            w = min(max(a, c), px1) - max(min(a, c), px0)
+            h = min(max(b, d), py1) - max(min(b, d), py0)
+            if w > 0 and h > 0:
+                area += w * h
+                if area >= total:
+                    break
         return min(area / total, 1.0)
     except Exception:
         return 0.0
@@ -439,8 +445,24 @@ def _overlaid_ocr_layer(page) -> bool:
         from viewer.text_extract2 import _is_ocr_layer
     except Exception:
         return False
+    if _no_invisible_text(page):
+        return False                       # 261114-11(§14.18): 내용 흐름에 `3 Tr` 가 없다 — 쪽을 돌려 볼 것도 없다
     try:
         return bool(_is_ocr_layer(page))
+    except Exception:
+        return False
+
+
+_TR3_RE = re.compile(rb"(?<![0-9.])3\s+Tr\b")
+
+
+def _no_invisible_text(page) -> bool:
+    """render mode 3(안 보임) 글자가 **있을 수 없는** 쪽인가 — 내용 흐름에 `3 Tr` 가 없고 폼 XObject 도 없다(폼 안은 보지 않으므로 그때는 모른다).
+    261114-11: 작은 그림 수만 개로 깐 쪽은 `get_texttrace` 한 번이 0.26~0.67초(TRB9.pdf) — 바이트 찾기는 0.1초 안. 모르면 False(종전대로 돌려 본다)."""
+    try:
+        if page.get_xobjects():
+            return False
+        return _TR3_RE.search(page.read_contents() or b"") is None
     except Exception:
         return False
 
@@ -449,7 +471,64 @@ def decide_source(page: "fitz.Page") -> tuple[str, dict]:
     """이 페이지를 'layer'(레이어 사용) 또는 'ocr'(재OCR) 중 무엇으로 처리할지 판정.
 
     핵심(§14.3-4): '텍스트 길이'가 아닌 품질로 판정하되, **전면 이미지(스캔)** 페이지는
-    덧씌운 텍스트 레이어가 깨진 OCR 일 수 있으므로 재OCR 을 우선한다(HM.pdf 사례)."""
+    덧씌운 텍스트 레이어가 깨진 OCR 일 수 있으므로 재OCR 을 우선한다(HM.pdf 사례).
+    261114-11(§14.18): (파일·수정 시각·쪽)마다 **프로세스에 하나** 기억한다 — 본문·텍스트 창·문서 정보 줄(배경)이 같은 쪽을
+    저마다 연 문서로 묻는다. 다른 스레드가 그 쪽을 판정하는 중이면 다시 하지 않고 기다린다(둘이 GIL 을 다투면 두 배로 선다)."""
+    key = _src_key(page)
+    if key is None:
+        return _decide_source(page)
+    with _SRC_LOCK:
+        got = _SRC_MEMO.get(key)
+        ev = None if got is not None else _SRC_BUSY.get(key)
+        mine = got is None and ev is None
+        if mine:
+            ev = _SRC_BUSY[key] = threading.Event()
+    if got is not None:
+        return got[0], dict(got[1])
+    if not mine:
+        ev.wait(SRC_WAIT_S)
+        with _SRC_LOCK:
+            got = _SRC_MEMO.get(key)
+        if got is not None:
+            return got[0], dict(got[1])
+        return _decide_source(page)
+    try:
+        src, why = _decide_source(page)
+        with _SRC_LOCK:
+            if len(_SRC_MEMO) >= SRC_MEMO_MAX:
+                _SRC_MEMO.clear()
+            _SRC_MEMO[key] = (src, dict(why))
+        return src, why
+    finally:
+        with _SRC_LOCK:
+            _SRC_BUSY.pop(key, None)
+        ev.set()
+
+
+import threading
+_SRC_LOCK = threading.Lock()
+_SRC_MEMO: dict = {}        # (파일, 수정 시각 ns, 쪽) -> (판정, 근거)
+_SRC_BUSY: dict = {}        # 판정 중인 열쇠 -> Event
+SRC_MEMO_MAX = 4096         # 넘으면 비운다(쪽 하나에 몇십 바이트)
+SRC_WAIT_S = 5.0            # 다른 스레드의 판정을 기다리는 상한 — 넘으면 스스로 한다
+
+
+def _src_key(page):
+    """(파일 경로, 수정 시각 ns, 쪽) — 메모리 문서·읽지 못하면 None(기억하지 않는다). 수정 시각은 문서 객체마다 한 번만 묻는다."""
+    try:
+        doc = page.parent
+        name = str(doc.name or "")
+        if not name:
+            return None
+        mt = doc.__dict__.get("_polypdf_mt")
+        if mt is None:
+            mt = doc.__dict__["_polypdf_mt"] = os.stat(name).st_mtime_ns
+        return (os.path.normcase(os.path.abspath(name)), mt, int(page.number))
+    except Exception:
+        return None
+
+
+def _decide_source(page: "fitz.Page") -> tuple[str, dict]:
     text = page.get_text("text")
     n = len(text.strip())
     has_img = bool(page.get_images(full=True))
@@ -463,9 +542,11 @@ def decide_source(page: "fitz.Page") -> tuple[str, dict]:
     #   그 글이 원본 그대로다. 종전에는 점유율만 보고 그 멀쩡한 층을 버리고 OCR 해
     #   `조 지 아 교 통 부` 처럼 글자마다 끊기고 본문이 제목으로 뒤집혔다(사용자 보고).
     #   실측(표본 4종 각 4쪽): 진짜 스캔 3종 = 안 보이는 층 100%, 구글 번역본 = 0%.
-    cov = _image_coverage(page) if has_img else 0.0
-    if cov >= 0.6 and _overlaid_ocr_layer(page):
-        return "ocr", {"reason": "scanned-page", "img_cov": round(cov, 2)}
+    # 261114-11(§14.18): 안 보이는 층인지 먼저(글자 한 번) — 점유율(그림 자리 읽기)은 그때만. 두 조건 모두라 판정은 같다.
+    if has_img and _overlaid_ocr_layer(page):
+        cov = _image_coverage(page)
+        if cov >= 0.6:
+            return "ocr", {"reason": "scanned-page", "img_cov": round(cov, 2)}
 
     # 텍스트가 거의 없고 이미지가 있으면 명백한 스캔
     if n < 30 and has_img:

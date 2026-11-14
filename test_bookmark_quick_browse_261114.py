@@ -9,10 +9,10 @@
 종전(실측): 40ms 연타에도 지나간 파일을 모두 열고, 열 때마다 썸네일 줄·쪽 낱말·텍스트 창·서명 확인을 그 자리에서 — 최장 정지 1.0초.
 
 A. 모두 접기 → ↓ 5번 연타(30ms) — 연 파일은 2개 이하(첫 것·멈춘 것), 마지막에 본문 = 고른 파일
-B. 멈춘 파일을 연 직후: 썸네일 붙듦·쪽 낱말 비어 있음·텍스트 창 아직 · 조금 뒤 보이는 썸네일 · 더 뒤 텍스트 창·쪽 낱말·붙듦 풂
+B. 멈춘 파일을 연 직후: 썸네일 붙듦·쪽 낱말 비어 있음·텍스트 창 아직 · 조금 뒤 보이는 썸네일 · 더 뒤 텍스트 창·붙듦 풂 · 쪽 낱말은 끌어 고를 때(261114-11)
 C. 표지 썸네일은 본문이 그린 것을 쓴다(그 쪽을 다시 그리지 않는다)
 D. 천천히(350ms) 누르면 지나가는 파일도 하나씩 연다
-E. 상태가 없고 가벼운 넘김도 아니면 종전대로 — 연 직후 썸네일을 붙들지 않고 쪽 낱말도 있다
+E. 상태가 없고 가벼운 넘김도 아니면 종전대로 — 연 직후 썸네일을 붙들지 않는다
 F. 가벼운 넘김(가짜 절전)이면 펼친 목록에서 다른 파일을 눌러도 표지 먼저
 G. Enter 로 연 파일은 종전대로 한 번에 다(붙들지 않는다)
 H. 연타 내내 가장 긴 멈춤 < 1초(응답성 SOT)
@@ -175,7 +175,9 @@ try:
     spin(getattr(mw, 'QUICK_REST_MS', 450) + 300)
     chk(not _held() and not _qh(), "B 멈춘 뒤 — 붙듦을 풀고 뒤처리 끝")
     chk(len([x for x in texts if x >= t_open]) >= 1, "B 멈춘 뒤 — 텍스트 창이 따라간다")
-    chk(bool(mv._page_words), "B 멈춘 뒤 — 쪽 낱말을 읽어 둔다(끌어 고르기)")
+    mv._sel_begin(60, 90)                                 # 261114-11: 쪽 낱말은 쓸 때 — 끌어 고르기를 시작하면 읽는다
+    chk(bool(mv._page_words), "B 멈춘 뒤 — 끌어 고르기를 시작하면 쪽 낱말을 읽는다")
+    mv.clear_text_selection()
     chk(("f5", 0) not in rendered, "C 표지 썸네일은 본문이 그린 것을 쓴다(쪽 0 을 다시 그리지 않음)",
         str([r for r in rendered if r[0] == "f5"][:4]))
     hb.stop()
@@ -204,9 +206,9 @@ try:
     n0 = len(loads)
     bt.tree.setCurrentItem(row["f6"])
     wait_load(n0)
-    held_e, words_e = _held(), bool(mv._page_words)
-    chk(cur_file() == "f6" and not held_e and words_e and not _qh(),
-        "E 상태 없음 — 종전대로 연 직후 썸네일을 붙들지 않고 쪽 낱말도 있다", f"held={held_e} words={words_e}")
+    held_e = _held()
+    chk(cur_file() == "f6" and not held_e and not _qh(),
+        "E 상태 없음 — 종전대로 연 직후 썸네일을 붙들지 않는다", f"held={held_e}")
     spin(800)
 
     # ── F 가벼운 넘김(가짜 절전) — 펼친 목록에서 누름 ──

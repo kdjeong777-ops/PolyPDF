@@ -19,6 +19,7 @@ from viewer.i18n import tr
 
 class LiteMixin:
     LITE_FOLLOW_MS = 300          # 넘김이 이만큼 멈추면 텍스트 창·단어장이 따라간다
+    TEXT_FOLLOW_MS = 30           # 가벼운 넘김이 아닐 때도 한 박자 뒤(261114-11, 응답성 SOT §4.7 ③)
     LITE_NOTICE_MS = 10000        # 상태 표시줄 알림을 보여 두는 시간
 
     def _lite_init(self):
