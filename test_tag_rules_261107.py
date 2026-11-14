@@ -131,7 +131,7 @@ try:
         job.ended.connect(lambda n: ends.append(n))
         chk(pump(lambda: bool(ends)), "C 저장하면 곧바로 — 끝났다")
         saved = json.loads((Path(settings_dir()) / "tag_rules.json").read_text(encoding="utf-8"))
-        chk(saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"} and saved.get("format_off") == ["논문"] and saved.get("pdf_auto_v") == 2,
+        chk(saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"} and saved.get("format_off") == ["논문"] and saved.get("pdf_auto_v") == TR.PDF_AUTO_V,
             "C 규칙 파일 — 형식 이름 바꾸기는 버리고 정리 표시", str(saved))
         chk(auto_tag.load_rules().get("format_off") == ["논문"], "C 앱이 읽는 규칙도 같다")
         chk(store.get_auto(A) == ["보고서"], "C 종전 형식 이름 바꾸기는 원래 이름으로(261113-10)", str(store.get_auto(A)))

@@ -260,6 +260,7 @@ try:
     root = tmp / "folder"; root.mkdir()
     doc_path = root / "계약서.pdf"
     shutil.copy(src, doc_path)
+    import test_fixtures as _TFX; _TFX.autotag_off()   # 261114-19: 자동 태그와 상관없는 검사 — 배경 태그 계산(기본 켬)이 목록 글·서명 전 확인을 바꾸지 않게
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1200, 820); mw.show(); spin(0.3)
     mw.open_folder(str(root)); spin(0.8)

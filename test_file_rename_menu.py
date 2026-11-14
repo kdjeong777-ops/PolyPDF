@@ -68,6 +68,7 @@ try:
     warns = []
     QMessageBox.warning = staticmethod(lambda *a, **k: warns.append(a[2] if len(a) > 2 else ""))
     from viewer.app import MainWindow
+    import test_fixtures as _TFX; _TFX.autotag_off()   # 261114-19: 자동 태그와 상관없는 검사 — 배경 태그 계산(기본 켬)이 목록 글·서명 전 확인을 바꾸지 않게
     mw = MainWindow(); mw.resize(1300, 850); mw.show(); app.processEvents()
     bt = mw.bookmark_tree
     tops = lambda: [bt.tree.topLevelItem(i).text(0) for i in range(bt.tree.topLevelItemCount())]

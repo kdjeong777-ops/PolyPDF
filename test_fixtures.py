@@ -329,6 +329,30 @@ def wait_main_open(mw, timeout: float = 10.0) -> bool:
     return not mw._main_opening()
 
 
+def autotag_off(mw=None) -> None:
+    """261114-19(검사 작성 SOT §14.7.2): 자동 태그와 상관없는 검사에서 PDF 자동 태그를 끈다 — 기본 켬(261113-10)이라
+    폴더를 열면 배경 계산이 목록 글(`·#태그` 꼬리)·첫 실행 요약 창을 바꿔 검사가 흔들린다.
+    `mw` 를 주면 그 창의 설정을, 없으면 시험 모드 설정 폴더의 settings.json 을(MainWindow 를 만들기 **전에**) 고친다.
+    `auto_tag_on_migrated` 도 True — 꺼 둔 설정을 한 번 켜는 옮기기(태그 SOT §3.5)가 다시 켜지 않게."""
+    vals = {"auto_tag_enabled": False, "auto_tag_on_migrated": True, "autotag_summary_shown": True}
+    if mw is not None:
+        mw._prefs.update(vals)
+        return
+    import json
+    from viewer.settings_store import settings_path
+    p = Path(settings_path("settings.json"))
+    assert "qttest" in str(p).lower(), "시험 모드(QStandardPaths.setTestModeEnabled)에서만 — 실제 설정 폴더를 쓰지 않는다: %s" % p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except Exception:
+        d = {}
+    prefs = dict(d.get("preferences") or {})              # 앱은 settings.json 의 "preferences" 를 읽는다
+    prefs.update(vals)
+    d["preferences"] = prefs
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 if __name__ == "__main__":                                 # 수동 점검용
     import sys
     sys.stdout.reconfigure(encoding="utf-8")

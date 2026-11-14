@@ -102,6 +102,7 @@ try:
 
     from viewer.app import MainWindow
     import viewer.widgets.sign_dialogs as sdlg
+    import test_fixtures as _TFX; _TFX.autotag_off()   # 261114-19: 자동 태그와 상관없는 검사 — 배경 태그 계산(기본 켬)이 목록 글·서명 전 확인을 바꾸지 않게
     mw = MainWindow(); mw._skip_save_on_close = True
     mw.resize(1200, 900); mw.show(); spin(0.3)
     mw.open_folder(str(src)); spin(0.8)

@@ -37,6 +37,7 @@ from viewer import settings_store
 from viewer.app import MainWindow
 
 SPATH = settings_store.settings_path("settings.json")
+_fx.autotag_off()   # 261114-19: 자동 태그와 상관없는 검사 — 배경 태그 계산(기본 켬)이 목록 글·서명 전 확인을 바꾸지 않게 — ORIG 에 담겨 매번 따라간다
 ORIG = io.open(SPATH, encoding="utf-8").read() if SPATH.exists() else None
 
 # 표본 폴더: PDF 2개

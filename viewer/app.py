@@ -7626,7 +7626,30 @@ class MainWindow(EditMixin, PresentMixin, PrintMixin, StudyMixin, UpdateMixin, S
             box.buttonClicked.connect(clicked)
             box.setWindowModality(Qt.WindowModality.NonModal)
             box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            # 261114-19: 배경 계산 끝에 뜨는 창 — 활성 창·포커스를 빼앗지 않는다(사용자가 치던 글자가 이 창으로 가지 않게)
+            box.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
             self._autotag_summary_box = box
+            prev, fw = QApplication.activeWindow(), QApplication.focusWidget()
+            # 속성을 무시하는 플랫폼(오프스크린 등)은 뒤따라 이 창을 활성화한다 — 띄운 직후(1초 안) 첫 활성화만 되돌린다
+            app = QApplication.instance()
+            t_show = __import__("time").monotonic()
+
+            def give_back(win):
+                try:
+                    if __import__("time").monotonic() - t_show > 1.0:
+                        app.focusWindowChanged.disconnect(give_back)
+                        return
+                    if win is None or win is not box.windowHandle():
+                        return
+                    app.focusWindowChanged.disconnect(give_back)
+                    if prev is not None:
+                        prev.activateWindow()
+                        if fw is not None:
+                            fw.setFocus(Qt.FocusReason.OtherFocusReason)
+                except (RuntimeError, TypeError):     # 그사이 지워진 창·이미 끊김
+                    pass
+            if prev is not None:
+                app.focusWindowChanged.connect(give_back)
             box.show()
         except Exception:
             pass

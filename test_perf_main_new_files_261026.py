@@ -39,6 +39,8 @@ ALLOWED = {
         "이미 있는 파일 — index.db 경로만 고침(UI 대기)",
     "viewer/app.py:MainWindow._startup_index_check":
         "이미 있는 파일 — 시작 뒤 색인이 비었는지(색인 중이면 미룸)",
+    "viewer/app.py:MainWindow._autotag_save_sig._write":
+        "배경 — `tagscan-sig` 스레드가 태그 계산 서명 쓰기(261114-4, 목록 빠짐은 261114-19)",
     "viewer/app.py:MainWindow._autotag_suggest_single":
         "이미 있는 파일 — 태그 제안의 글 읽기(UI 대기)",
     "viewer/app.py:MainWindow._remap_page_text._job":

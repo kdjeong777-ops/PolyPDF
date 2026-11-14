@@ -8,6 +8,7 @@
 A. 띄워도 곧바로 돌아온다(수정 전: 창을 닫을 때까지 돌아오지 않는다) · 창은 보이고 모달이 아니다
 B. [되돌리기] 를 누르면 `_autotag_undo`, [새 태그 후보 검토] 는 `_autotag_review_candidates`
 C. 두 번째 계산 끝에는 띄우지 않는다(1회)
+A 덧붙임(261114-19): 띄워도 활성 창·포커스는 주 창의 치던 칸 그대로(수정 전 show() 가 빼앗아 검사 아홉 개가 흔들렸다)
 """
 import os, sys, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -57,13 +58,16 @@ try:
     stats = {"total": 10, "known_tags": 3, "new_candidates": 2}
 
     # A
+    mw.activateWindow(); se = mw.bookmark_tree.search_edit; se.setFocus(); pump(0.2)
     QTimer.singleShot(2000, closer)
     t0 = time.monotonic()
     mw._autotag_first_summary(stats, 4)
     dt = time.monotonic() - t0
     chk(dt < 1.0, "A 요약을 띄워도 곧바로 돌아온다(막지 않음)", "%.2fs" % dt)
     chk(not guard.seen, "A 모달 exec 로 띄우지 않는다", guard.report())
-    app.processEvents()
+    pump(0.3)
+    chk(app.activeWindow() is mw and app.focusWidget() is se, "A 활성 창·포커스를 빼앗지 않는다(치던 칸 그대로, 261114-19)",
+        "%s / %s" % (type(app.activeWindow()).__name__, type(app.focusWidget()).__name__))
     bs = boxes()
     chk(len(bs) == 1, "A 요약 창이 하나 보인다", str(len(bs)))
     if bs:
