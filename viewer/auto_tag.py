@@ -45,7 +45,9 @@ TUNING = {
 }
 
 # ── PDF 자동 해시태그(§5.3·§5.3.1 — 261113-10 사용자 지시: 정해진 항목, 이름 고정, 켜고 끄기만) ──────
-FORMAT_VOCAB = ("설명서", "영수증", "공문", "견적서", "보고서", "발표자료", "논문")      # 형식(문서 종류) — 파일당 1개
+MANUAL = "제품설명서"            # 261114-14(사용자 지시): 종전 '설명서' — 기술 설명서는 뺀다(§5.3)
+FORMAT_VOCAB = (MANUAL, "영수증", "공문", "견적서", "보고서", "발표자료", "논문")      # 형식(문서 종류) — 파일당 1개
+RENAMED_FORMATS = {"설명서": MANUAL}   # 종전 이름 → 새 이름 — 붙은 태그를 한 번 옮긴다(§5.8 의 6, tag_rules PDF_AUTO_V 3)
 PDF_ATTR_ITEMS = ("날짜", "한글", "영어", "스크린샷", "스캔문서", "텍스트문서")          # 속성(§5.3.1) — 갈래마다 0~1개
 PDF_AUTO_ITEMS = PDF_ATTR_ITEMS + FORMAT_VOCAB                                          # 환경설정 차례(§5.8)
 REMOVED_FORMATS = ("시험성적서", "브로셔", "기사", "지침", "시방서", "기준", "법령")    # 261113-10 에 뺀 종전 형식 — 한 번 정리(§5.8 의 6)
@@ -54,6 +56,7 @@ FORMAT_ALIAS = {   # 별칭 → 표준명(§5.3 '뭉쳐 두는 쪽')
     "견적": "견적서", "quotation": "견적서",
     "협조요청": "공문", "통보": "공문", "회신": "공문", "공람": "공문",
     "ppt": "발표자료", "보고자료": "발표자료", "프레젠테이션": "발표자료",
+    "설명서": MANUAL,
 }
 _DATE_TAG = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -406,9 +409,13 @@ def extract_features(path, page_texts=None, folder_names=None,
 # §5.3 — L2 자료 형식 분류기 (닫힌 13종, 파일당 1개)
 # ═══════════════════════════════════════════════════════════════════════
 
+# 제품설명서 이름 낱말 — 제품 단서(이것만으로 제품설명서)와 약한 낱말(기술 문서에도 쓰여, 제품 단서가 따로 있어야 — 261114-14)
+_MANUAL_NAME_STRONG = ("설명서", "사용자", "사용법", "취급", "퀵", "quick start", "quickstart", "보증서")
+_MANUAL_NAME_WEAK = ("매뉴얼", "메뉴얼", "manual", "mnl", "guide", "instruction", "_um_")
+# 261114-14(사용자 결정 '기술 낱말이면 빼기'): 이름·제목·상위 폴더에 이 낱말이 있으면 본문 제품 낱말·2단 접지가 없는 한 제품설명서 아님
+_TECH_WORDS = ("기술", "technical", "설계", "시공", "지침", "편람")
 _EXPLICIT = [   # ① 파일명/표제 명시어 — 순서 = 판정 순서(261113-10: 지침·시방서·기준·법령·시험성적서는 뺐다, 견적서 더함)
-    ("설명서", ("설명서", "매뉴얼", "메뉴얼", "사용자", "사용법", "취급", "퀵", "manual", "mnl", "guide",
-             "quick start", "quickstart", "instruction", "_um_", "보증서")),   # 261114-2·-10 낱말 늘림(§5.3 표 — 'warranty' 는 포장 성능보증 문서에 걸려 뺐다)
+    (MANUAL, _MANUAL_NAME_STRONG + _MANUAL_NAME_WEAK),   # 261114-2·-10 낱말 늘림(§5.3 표 — 'warranty' 는 포장 성능보증 문서에 걸려 뺐다)
     ("견적서", ("견적", "quotation")),
     ("영수증", ("영수증", "세금계산서", "거래명세서", "invoice")),
     ("공문", ("공문", "협조요청", "공람")),
@@ -444,6 +451,16 @@ def folder_format(path: str):
     return None
 
 
+def _tech_doc(f: Features, name: str) -> bool:
+    """이름·제목·상위 폴더(`FOLDER_DEPTH` 단계)에 기술 낱말(§5.3, 261114-14)."""
+    if any(k in name for k in _TECH_WORDS):
+        return True
+    try:
+        return any(any(k in d.name.lower() for k in _TECH_WORDS) for d in list(Path(f.path).parents)[:FOLDER_DEPTH] if f.path)
+    except Exception:
+        return False
+
+
 def classify_format(f: Features, rules: dict | None = None, learned: dict | None = None) -> str | None:
     """§5.3 판정 순서: ①명시어 ①-2 사람이 고친 폴더 ①-3 폴더 이름 ②구조(견적서▶영수증▶공문▶설명서 본문▶논문)
     ②-2 고친 문서와 비슷한 본문 ③레이아웃(발표자료) ④기본값.
@@ -455,16 +472,25 @@ def classify_format(f: Features, rules: dict | None = None, learned: dict | None
     txt = f.struct_text[:20000].lower()      # ★ 원문 기준(위 보강) — 스캔이면 자연히 빈 문자열
     fmt = None
 
+    # 261114-14: 제품 단서(본문 제품 낱말·2단 접지) · 기술 문서
+    body_cue = bool(txt) and any(k in txt for k in _MANUAL_BODY) or (f.twocol or 0) >= TUNING["TWOCOL_PAGES"]
+    tech = _tech_doc(f, name)
+
     # ① 명시어 — 사람이 이름에 써 둔 것이 가장 확실
     for tag, keys in _EXPLICIT:
         if any(k in name for k in keys):
             fmt = tag
             break
+    if fmt == MANUAL and not body_cue:                # 기술 문서이거나 이름 단서가 약한 낱말뿐이면 아니다
+        if tech or not any(k in name for k in _MANUAL_NAME_STRONG):
+            fmt = None
     # ①-2 사람이 고친 종류(같은 폴더 2개 이상, §5.3.2) ①-3 폴더 이름(261114-2)
     if fmt is None and learned.get("dir") in FORMAT_VOCAB:
         fmt = learned["dir"]
     if fmt is None and f.path:
         fmt = folder_format(f.path)
+        if fmt == MANUAL and tech and not body_cue:
+            fmt = None
 
     # ② 강한 구조 신호 — 토큰이 특이한 순(§5.3 — ③보다 먼저: 짧은 문서 오분류 방지)
     if fmt is None and txt:
@@ -476,7 +502,7 @@ def classify_format(f: Features, rules: dict | None = None, learned: dict | None
                                 or re.search(r"제\s?\d{2,4}\s?[-–]\s?\d+\s?호", txt))):
             fmt = "공문"
         elif any(k in txt for k in _MANUAL_BODY):
-            fmt = "설명서"              # 261114-2·-10
+            fmt = MANUAL                # 261114-2·-10
         elif (("abstract" in txt and "reference" in txt)
               or "doi:" in txt or "doi.org" in txt
               or re.search(r"\bet\s+al\b", txt)):
@@ -493,7 +519,7 @@ def classify_format(f: Features, rules: dict | None = None, learned: dict | None
     #   261114-10(사용자 지시): 2단으로 작은 글씨가 빽빽한 가로 쪽은 발표자료가 아니라 접지 설명서(글자층 없는 스캔도 쪽 그림으로)
     if fmt is None and f.page_count:
         if _present_shape(f.aspect, f.text_per_page):
-            fmt = "설명서" if (f.twocol or 0) >= TUNING["TWOCOL_PAGES"] else "발표자료"
+            fmt = MANUAL if (f.twocol or 0) >= TUNING["TWOCOL_PAGES"] else "발표자료"
 
     # ④ 기본값 — 보고서(조건 못 맞추면 형식 없음).
     #   260830 시정: SOT §5.3 의 '보고서 = 이름 + 목차 + ≥20p' 에서 **목차 조건이 구현에서

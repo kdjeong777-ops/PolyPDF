@@ -1802,7 +1802,7 @@ class BookmarkTree(QWidget):
             a.setEnabled(False)
             self._add_tag_tool_items()
             return
-        from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QScrollArea,
+        from PyQt6.QtWidgets import (QCheckBox, QLabel as _QL, QRadioButton, QScrollArea,
                                      QVBoxLayout, QWidget, QWidgetAction)
         try:
             from viewer.auto_tag import axis_of
@@ -1825,12 +1825,18 @@ class BookmarkTree(QWidget):
                 continue
             hd = _QL("<b>%s</b>" % tr(gname))
             lay.addWidget(hd)
+            one = gname in ("형식", "속성")       # 261114-14(사용자 지시): 형식·속성은 옵션 단추 — 묶음마다 하나만(다시 누르면 풀림)
+            btns = []
             for t in groups[gname]:
-                cb = QCheckBox(f"#{t}  ({counts.get(t, 0)})")
+                cb = (QRadioButton if one else QCheckBox)(f"#{t}  ({counts.get(t, 0)})")
+                if one:
+                    cb.setAutoExclusive(False)
+                    btns.append((t, cb))
                 cb.setChecked(t.lower() in active)
                 cb.toggled.connect(
-                    lambda on, tag=t: (self._add_tag_to_search(tag) if on
-                                       else self._remove_tag_from_search(tag)))
+                    (lambda on, tag=t, grp=btns: self._pick_one_tag(tag, on, grp)) if one else
+                    (lambda on, tag=t: (self._add_tag_to_search(tag) if on
+                                        else self._remove_tag_from_search(tag))))
                 lay.addWidget(cb)
         dates = _pt.date_groups(counts)       # 261105-6: 하루 태그는 늘어놓지 않고 해·달 토큰으로(앞부분 일치)
         if dates:
@@ -1882,6 +1888,24 @@ class BookmarkTree(QWidget):
         """§5.1 체크 해제 = 토큰 제거(진실은 검색박스 텍스트)."""
         keep = [c for c in self.search_edit.text().split()
                 if not (c.startswith("#") and c.lstrip("#").lower() == tag.lower())]
+        self.search_edit.setText(" ".join(keep))
+
+    def _pick_one_tag(self, tag: str, on: bool, group):
+        """261114-14(검색 SOT §5.1, 사용자 지시): '#' 메뉴 형식·속성 묶음은 하나만 — 고르면 같은 묶음의 다른 토큰을 빼고
+        이 토큰을 넣는다(검색 칸을 한 번만 바꾼다), 다시 누르면 푼다."""
+        if not on:
+            self._remove_tag_from_search(tag)
+            return
+        others = {t.lower() for t, _b in group if t.lower() != tag.lower()}
+        keep = [c for c in self.search_edit.text().split()
+                if not (c.startswith("#") and c.lstrip("#").lower() in others)]
+        if ("#" + tag).lower() not in [c.lower() for c in keep]:
+            keep.append("#" + tag)
+        for t, b in group:
+            if t.lower() != tag.lower() and b.isChecked():
+                b.blockSignals(True)
+                b.setChecked(False)
+                b.blockSignals(False)
         self.search_edit.setText(" ".join(keep))
 
     def set_format(self, paths, fmt) -> list:

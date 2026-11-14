@@ -68,12 +68,12 @@ try:
     chk(fmt(scan_wide, []) != "발표자료", "A 종횡비 2.15 가로 스캔(다단) — 발표자료 아님", str(fmt(scan_wide, [])))
     slides = mk("x/회의.pdf", pages=12, size=(960, 540), text="slide")
     chk(fmt(slides, ["slide"] * 12) == "발표자료", "A 16:9 글자 적은 슬라이드는 그대로 발표자료")
-    chk(fmt(mk("x/CR1000 메뉴얼.pdf"), ["x"]) == "설명서", "A 이름 '메뉴얼'(맞춤법 변형) → 설명서")
-    chk(fmt(mk("x/보조배터리.pdf"), ["이 사용설명서를 잘 읽고 안전하게 사용하십시오. 제품 사양 정격 입력"]) == "설명서", "A 본문 '사용설명서'·'제품 사양' → 설명서")
-    chk(fmt(mk("11.1 설명서.회사/보조배터리.pdf", pages=4, size=(842, 392), img=True), []) == "설명서", "A 폴더 이름 '11.1 설명서.회사' → 설명서")
+    chk(fmt(mk("x/CR1000 메뉴얼.pdf"), ["user manual"]) == "제품설명서", "A 이름 '메뉴얼'(맞춤법 변형)+제품 단서 → 제품설명서(261114-14: 이름이 약한 낱말뿐이면 제품 단서가 있어야)")
+    chk(fmt(mk("x/보조배터리.pdf"), ["이 사용설명서를 잘 읽고 안전하게 사용하십시오. 제품 사양 정격 입력"]) == "제품설명서", "A 본문 '사용설명서'·'제품 사양' → 설명서")
+    chk(fmt(mk("11.1 설명서.회사/보조배터리.pdf", pages=4, size=(842, 392), img=True), []) == "제품설명서", "A 폴더 이름 '11.1 설명서.회사' → 설명서")
     chk(fmt(mk("06.1 국외보고서/a.pdf"), ["x"]) == "보고서", "A 폴더 이름 '국외보고서' → 보고서")
     chk(fmt(mk("x/a.pdf"), ["x"], {"dir": "견적서"}) == "견적서", "A 사람이 고친 폴더 종류(①-2)")
-    chk(fmt(mk("x/b.pdf"), ["x"], {"sims": {"논문": 0.41, "설명서": 0.2}}) == "논문", "A 고친 문서와 비슷한 본문(②-2, 0.30 이상)")
+    chk(fmt(mk("x/b.pdf"), ["x"], {"sims": {"논문": 0.41, "제품설명서": 0.2}}) == "논문", "A 고친 문서와 비슷한 본문(②-2, 0.30 이상)")
     chk(fmt(mk("x/c.pdf"), ["x"], {"sims": {"논문": 0.2}}) is None, "A 유사도가 낮으면 쓰지 않는다")
 
     # B
@@ -84,8 +84,8 @@ try:
     P = [mk("docs/%s.pdf" % n) for n in ("a", "b", "c")]
     st.set_auto(P[0], ["2023-06-22", "발표자료", "스캔문서"])
     st.set(P[0], ["가족"])
-    ch = st.set_format([P[0]], "설명서")
-    chk(ch == [P[0]] and st.get_manual(P[0]) == ["가족", "설명서"] and "발표자료" in st.get_rejected(P[0])
+    ch = st.set_format([P[0]], "제품설명서")
+    chk(ch == [P[0]] and st.get_manual(P[0]) == ["가족", "제품설명서"] and "발표자료" in st.get_rejected(P[0])
         and st.get_auto(P[0]) == ["2023-06-22", "스캔문서"], "B 바꾸기 — 자동 종류는 거절, 고른 종류는 직접 태그, 다른 태그는 그대로", str(st.record(P[0])))
     st.set_format([P[0]], "발표자료")
     chk(st.get_manual(P[0]) == ["가족", "발표자료"] and "발표자료" not in st.get_rejected(P[0]), "B 거절했던 종류도 다시 고를 수 있다", str(st.record(P[0])))
@@ -102,12 +102,12 @@ try:
     chk(rows.get("스캔문서", "").startswith("·#") and rows.get("발표자료", "").startswith("#"), "C 자동으로만 붙은 태그 줄은 '·#', 직접 태그가 있으면 '#'", str(rows))
     dlg.lst_files.clearSelection(); dlg.lst_files.item(0).setSelected(True); pump()
     m = dlg.btn_format.menu()
-    acts = [a for a in m.actions() if a.text() == "설명서"] if m else []
+    acts = [a for a in m.actions() if a.text() == "제품설명서"] if m else []
     chk(bool(acts) and dlg.btn_format.parent() is dlg and dlg.btn_format.y() < dlg.lst_tags.mapTo(dlg, dlg.lst_tags.rect().topLeft()).y(),
         "C 위 줄 [문서 종류 ▾] 에 종류가 있다")
     if acts:
         acts[0].trigger(); pump()
-    chk(st.get_manual(P[1]) == ["설명서"] and "발표자료" in st.get_rejected(P[1]) and st.get_manual(P[2]) == ["발표자료"],
+    chk(st.get_manual(P[1]) == ["제품설명서"] and "발표자료" in st.get_rejected(P[1]) and st.get_manual(P[2]) == ["발표자료"],
         "C 고른 파일만 바뀐다", f"{st.record(P[1])} {st.record(P[2])}")
     dlg.undo(); pump()
     chk(st.get_auto(P[1]) == ["발표자료", "스캔문서"] and st.get_manual(P[1]) == [], "C 되돌리기 한 걸음", str(st.record(P[1])))
@@ -132,13 +132,13 @@ try:
     from viewer.workers import AutoTagWorker
     F = [mk("수집/%d.pdf" % i, text="x") for i in range(4)]
     res = {}
-    w = AutoTagWorker(os.path.join(str(tmp), "none.db"), F, {"설명서": [F[0], F[1]]}, known_tags=["설명서"], rules={},
+    w = AutoTagWorker(os.path.join(str(tmp), "none.db"), F, {"제품설명서": [F[0], F[1]]}, known_tags=["제품설명서"], rules={},
                       today_year=2026, store_keys=set(), fp_missing_keys=set())
     w.finished.connect(lambda r, s: res.update(r={x["path"]: [t for t, _ in x["auto"]] for x in r}))
     w.run()
     rr = res.get("r", {})
     chk(os.path.normcase(os.path.dirname(F[0])) in w.learned_dirs, "E 같은 폴더 2개 직접 태그 → 폴더 규칙", str(w.learned_dirs))
-    chk("설명서" in rr.get(F[2], []) and "설명서" in rr.get(F[3], []), "E 그 폴더의 다른 PDF 에 설명서", str(rr))
+    chk("제품설명서" in rr.get(F[2], []) and "제품설명서" in rr.get(F[3], []), "E 그 폴더의 다른 PDF 에 설명서", str(rr))
     chk(not any(t in AT.FORMAT_VOCAB for t in rr.get(F[0], [])), "E 직접 종류가 있는 파일에는 자동 종류를 더 붙이지 않는다", str(rr.get(F[0])))
     mw.close()
 except Exception:

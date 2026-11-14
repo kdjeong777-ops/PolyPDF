@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fitz
 from PyQt6.QtCore import QStandardPaths, QCoreApplication
 QStandardPaths.setTestModeEnabled(True)             # 마스터 §14.7.2 의 3
-from PyQt6.QtWidgets import QApplication, QCheckBox, QWidgetAction
+from PyQt6.QtWidgets import QApplication, QCheckBox, QRadioButton, QWidgetAction
 from PyQt6.QtTest import QTest
 
 app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -65,7 +65,7 @@ try:
         out = {}
         for act in bt._tag_menu.actions():
             if isinstance(act, QWidgetAction) and act.defaultWidget() is not None:
-                for c in act.defaultWidget().findChildren(QCheckBox):
+                for c in act.defaultWidget().findChildren((QCheckBox, QRadioButton)):   # 261114-14: 형식·속성은 옵션 단추
                     t = c.text().strip()
                     out[t.split()[0].lstrip("#")] = (int(t.rsplit("(", 1)[1].rstrip(")")), c)
         return out

@@ -291,7 +291,7 @@ present = _mk_pdf("발표.pdf", [(960, 540, f"슬라이드 {i}") for i in range(
 check("§12-25 발표자료(가로+저텍스트)", _fmt(present) == "발표자료")
 
 guide_land = _mk_pdf("포장 설명서.pdf", [(960, 540, "요약") for _ in range(12)])
-check("§12-23 명시어가 레이아웃을 이김", _fmt(guide_land) == "설명서")
+check("§12-23 명시어가 레이아웃을 이김", _fmt(guide_land) == "제품설명서")
 check("261113-10 지침은 뺀 형식 — 이름에 있어도 형식 없음", _fmt(_mk_pdf("포장 지침.pdf", [(595, 842, "요약")])) is None)
 
 receipt = _mk_pdf("거래.pdf", [(595, 842,
@@ -377,7 +377,7 @@ scan_guide = os.path.join(WORK, "스캔 포장 설명서 2021.pdf")
 shutil.copy2(PDF2, scan_guide)
 sf = extract_features(scan_guide)
 check("§12-28 스캔 감지", sf.scanned)
-check("§12-28 스캔에도 형식(파일명)", classify_format(sf) == "설명서")
+check("§12-28 스캔에도 형식(파일명)", classify_format(sf) == "제품설명서")
 sy, ssrc, _ = extract_year(sf, today_year=2026)
 check("§12-28 스캔에도 연도(파일명)", sy == 2021 and ssrc == "name")
 sugg = suggest_tags(sf, {"배수성": {"porous": 1.0}}, {}, 1)
@@ -545,7 +545,7 @@ def _auto_tags_of(key_):
     return [t for t, _ in r.get("auto", [])]
 
 
-check("P2 형식 자동(설명서·파일명)", "설명서" in _auto_tags_of("지침"))
+check("P2 형식 자동(제품설명서·파일명)", "제품설명서" in _auto_tags_of("지침"))
 check("P2 속성 자동(텍스트문서)", "텍스트문서" in _auto_tags_of("지침"), str(_auto_tags_of("지침")))
 check("P2 형식 자동(발표자료·레이아웃)", "발표자료" in _auto_tags_of("발표"))
 check("P2 ★ L1 주제 자동 — 4번째 porous 논문에 배수성",

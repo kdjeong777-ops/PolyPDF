@@ -97,8 +97,8 @@ try:
     from viewer.auto_tag import PDF_ATTR_ITEMS
     chk(heads[:3] == ["문서 종류", "자동 해시태그 속성", "기존 태그"] and all(f in av for f in FORMAT_VOCAB) and all(a in av for a in PDF_ATTR_ITEMS),
         "A 문서 종류 7개·자동 해시태그 속성 6개는 늘 보인다(261114-2 덧붙임 2)·기존 태그 묶음", str(heads) + str(list(av)))
-    chk(av.get("발표자료", "").endswith("✓") and av.get("스캔문서", "").endswith("◐") and not av.get("설명서", "").endswith(("✓", "◐")),
-        "A 13 항목 — 고른 파일 모두에 있으면 ✓, 일부만이면 ◐", str({k: av.get(k) for k in ("발표자료", "스캔문서", "설명서")}))
+    chk(av.get("발표자료", "").endswith("✓") and av.get("스캔문서", "").endswith("◐") and not av.get("제품설명서", "").endswith(("✓", "◐")),
+        "A 13 항목 — 고른 파일 모두에 있으면 ✓, 일부만이면 ◐", str({k: av.get(k) for k in ("발표자료", "스캔문서", "제품설명서")}))
     chk("포장" in av and "균열" not in av, "A 기존 태그는 고른 파일에 있으면 오른쪽에만, 다른 파일의 태그는 왼쪽에", str(list(av)))
 
     # B
@@ -108,11 +108,11 @@ try:
     chk("고른 파일 2개" in dlg.g_attached.title(), "B 머리 '붙은 태그 — 고른 파일 2개'", dlg.g_attached.title())
 
     # C
-    pick(la, "설명서"); pump()
+    pick(la, "제품설명서"); pump()
     QTest.mouseClick(dlg.btn_to, Qt.MouseButton.LeftButton); pump()
-    chk(st.get_manual(P[0]) == ["설명서"] and "발표자료" in st.get_rejected(P[0]) and "설명서" in st.get_manual(P[1])
+    chk(st.get_manual(P[0]) == ["제품설명서"] and "발표자료" in st.get_rejected(P[0]) and "제품설명서" in st.get_manual(P[1])
         and "발표자료" not in st.get(P[1]), "C 문서 종류 [→] — 종류가 설명서 하나로", f"{st.record(P[0])} {st.record(P[1])}")
-    chk("설명서" in rows(lt) and rows(la).get("설명서", "").endswith("✓"), "C 옮긴 뒤 목록 — 설명서는 오른쪽에, 왼쪽 줄은 ✓")
+    chk("제품설명서" in rows(lt) and rows(la).get("제품설명서", "").endswith("✓"), "C 옮긴 뒤 목록 — 설명서는 오른쪽에, 왼쪽 줄은 ✓")
 
     # D
     it = pick(la, "포장")

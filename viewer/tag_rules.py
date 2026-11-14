@@ -22,7 +22,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from viewer.i18n import tr
 
 PHOTO_KINDS = ("date", "region", "device", "screenshot")      # 사진 종류(영수증·명함·서류)는 설정 photo_kind_ocr 이 켜고 끈다
-PDF_AUTO_V = 2
+PDF_AUTO_V = 3                       # 3 = 261114-14 '설명서' → '제품설명서' 옮기기
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RULE_KEYS = ("alias", "format_off", "photo_off", "format_custom", "pdf_auto_v")
 
@@ -44,7 +44,9 @@ def normalize(rules: dict | None) -> dict:
             alias[k] = v
     r["alias"] = alias
     r.pop("format_custom", None)                              # 261113-10: '분류 더하기' 없앰
-    r["format_off"] = [f for f in PDF_AUTO_ITEMS if f in set(r.get("format_off") or ())]
+    from viewer.auto_tag import RENAMED_FORMATS
+    off = {RENAMED_FORMATS.get(f, f) for f in (r.get("format_off") or ())}     # 261114-14: 끈 '설명서' 는 끈 '제품설명서'
+    r["format_off"] = [f for f in PDF_AUTO_ITEMS if f in off]
     r["photo_off"] = [k for k in PHOTO_KINDS if k in set(r.get("photo_off") or ())]
     if r.get("pdf_auto_v") != PDF_AUTO_V:
         r.pop("pdf_auto_v", None)
@@ -75,8 +77,9 @@ def remapper(old: dict | None, new: dict | None, migrate: bool = False):
     """옛 규칙으로 붙은 자동 태그 → 새 규칙의 태그(None = 뺀다) — `fn(태그, 파일 키)`.
     옛 붙일 이름 → 원래 이름 → 새 규칙. 끈 PDF 자동 해시태그는 **PDF 파일에서만** 뺀다(§5.8 의 7 — 사진의 같은 이름은 사진 설정 몫).
     migrate(§5.8 의 6): 빠진 종전 형식·사용자 분류(`format_custom`)의 자동 태그도 PDF 에서 뗀다."""
-    from viewer.auto_tag import REMOVED_FORMATS, FORMAT_VOCAB
+    from viewer.auto_tag import REMOVED_FORMATS, FORMAT_VOCAB, RENAMED_FORMATS
     raw_old = dict(old or {})
+    ren = {k.lower(): v for k, v in RENAMED_FORMATS.items()} if migrate else {}
     new = normalize(new)
     rev = {}
     for k, v in dict(raw_old.get("alias") or {}).items():     # 정규화 전 — 종전 '형식 이름 바꾸기' 도 원래 이름으로
@@ -96,6 +99,9 @@ def remapper(old: dict | None, new: dict | None, migrate: bool = False):
         std = rev.get((tag or "").lower(), tag)
         sl = std.lower()
         if str(key or "").lower().endswith(".pdf"):
+            if sl in ren:                                   # 261114-14: 종전 형식 이름 → 새 이름(PDF 만)
+                std = ren[sl]
+                sl = std.lower()
             if sl in gone or sl in off or ("날짜" in off and _DATE.match(sl)):
                 return None
         return nal.get(sl, std)
@@ -305,6 +311,10 @@ class TagRulesJob(QObject):
                 return
             keys = store.remap_auto(remapper(self.old, self.new, self.migrate))
             self._changed |= set(keys)
+            if self.migrate:                                # 261114-14: 직접 붙인·거절한 종전 형식 이름도(PDF 만)
+                from viewer.auto_tag import RENAMED_FORMATS
+                for o, n in RENAMED_FORMATS.items():
+                    self._changed |= set(store.rename_pdf_tag(o, n))
             try:
                 self.mw.bookmark_tree.refresh_tag_labels()
             except Exception:

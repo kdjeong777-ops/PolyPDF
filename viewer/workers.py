@@ -1773,7 +1773,7 @@ class AutoTagWorker(QObject):
     YIELD_S = 0.005      # 260906-8(응답성 SOT §4 ②): 파일마다 GIL 양보
     FOUND_EVERY = 50
 
-    TAGGER_VER = 2                               # 261114-4: 판정 규칙을 바꾸면 올린다(입력 서명이 달라져 다시 계산) · 2 = 261114-10 2단 설명서
+    TAGGER_VER = 3                               # 261114-4: 판정 규칙을 바꾸면 올린다(입력 서명이 달라져 다시 계산) · 2 = 261114-10 2단 설명서 · 3 = 제품설명서(기술 문서 뺌)
 
     def __init__(self, db_path, paths, tagged_docs, known_tags, rules,
                  today_year, store_keys, fp_missing_keys, kw_skip_keys=(), force=False, store_hash="", priority=()):

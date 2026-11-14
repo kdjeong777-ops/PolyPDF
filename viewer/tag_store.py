@@ -392,6 +392,42 @@ class TagStore:
                 self._dirty = True
         return changed
 
+    def rename_pdf_tag(self, old: str, new: str) -> list:
+        """PDF 기록의 **직접 붙인·거절한** 태그 이름을 바꾼다(261114-14 — 종전 형식 '설명서' → '제품설명서', 자동 태그는 `remap_auto`).
+        바뀐 키 목록."""
+        ol = str(old).lower()
+        changed = []
+
+        def ren(ts):
+            out, low = [], set()
+            for t in ts or []:
+                t2 = new if str(t).lower() == ol else t
+                if str(t2).lower() not in low:
+                    low.add(str(t2).lower())
+                    out.append(t2)
+            return out
+        with self.bulk():
+            for k, v in list(self._data.items()):
+                if not str(k).lower().endswith(".pdf"):
+                    continue
+                if isinstance(v, list):
+                    if any(str(t).lower() == ol for t in v):
+                        self._data[k] = ren(v)
+                        changed.append(k)
+                    continue
+                if not isinstance(v, dict):
+                    continue
+                hit = False
+                for fld in ("manual", "rejected"):
+                    if any(str(t).lower() == ol for t in (v.get(fld) or [])):
+                        v[fld] = ren(v[fld])
+                        hit = True
+                if hit:
+                    changed.append(k)
+            if changed:
+                self._dirty = True
+        return changed
+
     @staticmethod
     def _drop_from_parts(v: dict, drop: set):
         parts = v.get("auto_parts")

@@ -110,7 +110,7 @@ try:
     if g1:
         cbs = [c.text() for c in g1[0].findChildren(QCheckBox) if c is not dlg.chk_auto_tag]
         chk(cbs == list(AT.PDF_AUTO_ITEMS) and cbs[:6] == ["날짜", "한글", "영어", "스크린샷", "스캔문서", "텍스트문서"]
-            and cbs[6:] == ["설명서", "영수증", "공문", "견적서", "보고서", "발표자료", "논문"], "A 13 항목 — 사용자 차례", str(cbs))
+            and cbs[6:] == ["제품설명서", "영수증", "공문", "견적서", "보고서", "발표자료", "논문"], "A 13 항목 — 사용자 차례", str(cbs))
         chk(not g1[0].findChildren(QLineEdit), "A 이름을 고칠 글 상자가 없다")
         chk(not pn.fmt_chk["논문"].isChecked() and pn.fmt_chk["보고서"].isChecked(), "A 지금 규칙(논문 끔)")
     chk(not [b for b in pn.findChildren(QPushButton) if b.text() == "분류 더하기"], "A [분류 더하기] 없음")
@@ -166,7 +166,7 @@ try:
     chk(store.get_auto_part(PH, "kind") == ["영수증"] and store.get_auto_part(PH, "meta") == ["2026-11-05", "GalaxyS23"],
         "C 사진 태그는 사진 규칙대로(별칭만)", str(store.record(PH)))
     saved = json.loads(rp.read_text(encoding="utf-8"))
-    chk(saved.get("pdf_auto_v") == 2 and "format_custom" not in saved and saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"}
+    chk(saved.get("pdf_auto_v") == TR.PDF_AUTO_V and "format_custom" not in saved and saved.get("alias") == {"SamsungSM-S918N": "GalaxyS23"}
         and saved.get("format_off") == ["논문"] and saved.get("mine") == 1, "C 규칙 파일 — 정리 표시, 분류·형식 이름 바꾸기 없음, 다른 키는 남는다", str(saved))
     n0 = len(ends)
     mw._pdf_auto_migrated = False

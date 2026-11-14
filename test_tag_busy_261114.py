@@ -81,7 +81,7 @@ try:
       w.found.connect(lambda d: got.append(dict(d)))
       w.finished.connect(lambda r, s: fin.append(s))
       w.run()
-      chk(got and MAN in got[0] and "설명서" in got[0][MAN], "A 먼저 할 파일의 종류를 곧바로 내보낸다", str(got[:1])[:200])
+      chk(got and MAN in got[0] and "제품설명서" in got[0][MAN], "A 먼저 할 파일의 종류를 곧바로 내보낸다", str(got[:1])[:200])
       n_all = sum(len(g) for g in got)
       chk(len(got) >= 3 and n_all == len(ALL), "A 1패스 동안 묶음으로 모두 내보낸다", "%d 묶음 %d 파일" % (len(got), n_all))
       w2 = AutoTagWorker(db, ALL, {}, [], {}, 2026, set(), set(), force=True)
@@ -122,7 +122,7 @@ try:
                 seen["msg"] = m
             seen["stop"] = bool(jobs["autotag"].get("cancel"))
             seen["bar"] = mw.progress.isVisible()
-        if not ends and not seen["early"] and "설명서" in st.get_auto(MAN):
+        if not ends and not seen["early"] and "제품설명서" in st.get_auto(MAN):
             seen["early"] = True
             seen["topic"] = "아스팔트" in st.get_auto(MAN) and "발표자료" not in st.get_auto(MAN)
         if not ends and not seen["menu"] and seen["job"]:

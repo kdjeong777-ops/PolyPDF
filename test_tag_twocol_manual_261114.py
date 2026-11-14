@@ -86,28 +86,28 @@ try:
     leo = save_scan("x/Office.키보드.FC980M.pdf", True)
     f = feats(leo)
     chk(f.scanned and 1.3 <= f.aspect <= 1.9, "A 준비 — 글자층 없는 A4 가로 스캔", "scan=%s ar=%.2f" % (f.scanned, f.aspect))
-    chk(fmt(leo, f) == "설명서", "A 2단·작은 글씨 빽빽한 가로 스캔 → 설명서(발표자료 아님)", "%s twocol=%s" % (fmt(leo, f), getattr(f, "twocol", "-")))
+    chk(fmt(leo, f) == "제품설명서", "A 2단·작은 글씨 빽빽한 가로 스캔 → 설명서(발표자료 아님)", "%s twocol=%s" % (fmt(leo, f), getattr(f, "twocol", "-")))
     sl = save_scan("x/HIR 발표.pdf", False)
     chk(fmt(sl) == "발표자료", "A 큰 글씨 슬라이드 스캔(두 단 글머리라도) → 발표자료 그대로", str(fmt(sl)))
 
     # B — 글자층 있는 가로
     tx = save_text("x/접지 안내.pdf", True)
     ft = feats(tx)
-    chk(fmt(tx, ft) == "설명서", "B 글자층 있는 가로 2단 빽빽(쪽당 글자 < 600) → 설명서", "%s tpp=%d twocol=%s" % (fmt(tx, ft), ft.text_per_page, getattr(ft, "twocol", "-")))
+    chk(fmt(tx, ft) == "제품설명서", "B 글자층 있는 가로 2단 빽빽(쪽당 글자 < 600) → 설명서", "%s tpp=%d twocol=%s" % (fmt(tx, ft), ft.text_per_page, getattr(ft, "twocol", "-")))
     chk(fmt(save_text("x/발표.pdf", False)) == "발표자료", "B 글자 적은 가로 슬라이드 → 발표자료")
 
     # C — 낱말(본문은 앞 3쪽·뒤 2쪽 원문)
     def body(txt):
         g = AT.Features(path=str(tmp / "y" / "a.pdf"), stem="a", page_count=2, struct_text=txt, aspect=0.71, text_per_page=900)
         return AT.classify_format(g, {})
-    chk(body("보 증 서 아님 — 보증서 본 보증서는 제품에 문제가 발생했을 경우") == "설명서", "C 본문 '보증서' → 설명서", str(body("본 보증서는")))
-    chk(body("고장 시 A/S 를 요청한다") != "설명서", "C 약한 낱말 하나('A/S')만으로는 설명서 아님", str(body("A/S")))
-    chk(body("성능보증 보증기간 5년 warranty 고객지원 고객센터") != "설명서", "C 약한 낱말이 여럿이어도 설명서 아님(성능보증 보고서)")
-    chk(body("This limited warranty is valid only in Korea.") == "설명서", "C 본문 'limited warranty' → 설명서")
+    chk(body("보 증 서 아님 — 보증서 본 보증서는 제품에 문제가 발생했을 경우") == "제품설명서", "C 본문 '보증서' → 설명서", str(body("본 보증서는")))
+    chk(body("고장 시 A/S 를 요청한다") != "제품설명서", "C 약한 낱말 하나('A/S')만으로는 설명서 아님", str(body("A/S")))
+    chk(body("성능보증 보증기간 5년 warranty 고객지원 고객센터") != "제품설명서", "C 약한 낱말이 여럿이어도 설명서 아님(성능보증 보고서)")
+    chk(body("This limited warranty is valid only in Korea.") == "제품설명서", "C 본문 'limited warranty' → 설명서")
     g = AT.Features(path=str(tmp / "y" / "키보드 보증서.pdf"), stem="키보드 보증서", page_count=1)
-    chk(AT.classify_format(g, {}) == "설명서", "C 이름 '보증서' → 설명서")
+    chk(AT.classify_format(g, {}) == "제품설명서", "C 이름 '보증서' → 설명서")
     g = AT.Features(path=str(tmp / "y" / "Minnesota Warranty Use Summary.pdf"), stem="Minnesota Warranty Use Summary", page_count=1)
-    chk(AT.classify_format(g, {}) != "설명서", "C 이름 'warranty'(포장 성능보증)만으로는 설명서 아님")
+    chk(AT.classify_format(g, {}) != "제품설명서", "C 이름 'warranty'(포장 성능보증)만으로는 설명서 아님")
 
     # D — 그 전(2단 값 없는) 재료: 읽을 때 2단만 채운다
     from viewer.indexer import PdfIndex
@@ -119,7 +119,7 @@ try:
         got = ix.tagfeat(leo)
         chk(got is not None and "twocol" in got[0], "D 그 전 재료를 읽으면 2단 값이 채워진다", str(got and sorted(got[0])))
         f2 = AT.features_from_dict(leo, got[0]) if got else None
-        chk(f2 is not None and AT.classify_format(f2, {}) == "설명서", "D 채운 재료로 → 설명서")
+        chk(f2 is not None and AT.classify_format(f2, {}) == "제품설명서", "D 채운 재료로 → 설명서")
         got2 = ix.tagfeat(leo)
         chk(got2 is not None and got2[0].get("twocol") == got[0].get("twocol"), "D 채운 값은 색인 DB 에 남는다(다음엔 다시 재지 않음)")
         port2 = dict(d0, aspect=0.71)
